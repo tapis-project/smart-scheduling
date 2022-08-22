@@ -33,14 +33,14 @@ def createIfNotExists(connection, tableName):
     connection.get_warnings = True
     cursor = connection.cursor()
 
-    cursor.execute("CREATE TABLE IF NOT EXISTS " + tableName + " (jobid int unsigned NOT NULL PRIMARY KEY, user varchar(80) NOT NULL, account varchar(50) NOT NULL, start datetime NOT NULL, end datetime NOT NULL, submit datetime NOT NULL, queue varchar(22) NOT NULL, timelimit int unsigned NOT NULL, jobname varchar(50) NOT NULL, state varchar(20) NOT NULL, nnodes int unsigned NOT NULL, reqcpus int unsigned NOT NULL, nodelist TEXT NOT NULL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS " + tableName + " (jobid varchar(20) NOT NULL PRIMARY KEY, user varchar(80) NOT NULL, account varchar(50) NOT NULL, start datetime NOT NULL, end datetime NOT NULL, submit datetime NOT NULL, queue varchar(22) NOT NULL, max_minutes int unsigned NOT NULL, jobname varchar(50) NOT NULL, state varchar(20) NOT NULL, nnodes int unsigned NOT NULL, reqcpus int unsigned NOT NULL, nodelist TEXT NOT NULL)")
     tuple = cursor.fetchwarnings() # <- returns a list of tuples
+
+    cursor.execute("CREATE TABLE IF NOT EXISTS " + tableName + "")
 
     if tuple is None:
         print('New table generated\nCreating indexes')
         # ALl permissions granted, no warning message or message in general outputted to the user, no need for conditional statements
-
-        # Seperate based on each index
 
         cursor.execute('CREATE INDEX index_jobid ON HPC_Job_Time_Data.' + tableName + '(jobid)')
         cursor.execute('CREATE INDEX index_user ON HPC_Job_Time_Data.' + tableName + '(user)')
@@ -51,7 +51,7 @@ def createIfNotExists(connection, tableName):
         cursor.execute('CREATE INDEX index_end ON HPC_Job_Time_Data.' + tableName + '(end)')
 
         cursor.execute('CREATE INDEX index_queue ON HPC_Job_Time_Data.' + tableName + '(queue)')
-        cursor.execute('CREATE INDEX index_timelimit ON HPC_Job_Time_Data.' + tableName + '(timelimit)')
+        cursor.execute('CREATE INDEX index_max_minutes ON HPC_Job_Time_Data.' + tableName + '(max_minutes)')
         cursor.execute('CREATE INDEX index_state ON HPC_Job_Time_Data.' + tableName + '(state)')
 
         cursor.execute('CREATE INDEX index_nnodes ON HPC_Job_Time_Data.' + tableName + '(nnodes)')
@@ -59,14 +59,13 @@ def createIfNotExists(connection, tableName):
         #cursor.execute('CREATE INDEX index_nodelist ON HPC_Job_Time_Data.' + tableName + '(nodelist)')
 
         connection.commit() # Commits any tables and indices that were created to the database
-
+        print('\nIndexes created')
     elif(tuple[0][1] == 1050):
         print('\nTable already exists')
 
     cursor.close()
 
 def injection(connection, tableName):
-#Injects data into a specified table
 
     cursor = connection.cursor()
 
@@ -74,11 +73,9 @@ def injection(connection, tableName):
 
     os.chdir(source)
 
-
-    local = pytz.timezone("America/Chicago")
-
+    local = pytz.tbbbbimezone("US/Central")
+    counter = 0
     for filename in os.listdir(source):
-        print('New file')
         readIn = open(filename, 'r')
         next(readIn)
         for line in readIn:
@@ -87,23 +84,24 @@ def injection(connection, tableName):
             user = str(row[1])
             account = str(row[2])
 
+            # Generates a pytz.AmbiguousTimeError
+
             # Conversion to UTC for start, end and submit variables
             local_start = datetime.strptime(row[3], '%Y-%m-%dT%H:%M:%S')
-            local_dt_strt = local.localize(local_start, is_dst=None)
+            local_dt_strt = local.localize(local_start, is_dst=True)
             start = local_dt_strt.astimezone(pytz.utc)
 
-
             local_end = datetime.strptime(row[4], '%Y-%m-%dT%H:%M:%S')
-            local_dt_end = local.localize(local_end, is_dst=None)
+            local_dt_end = local.localize(local_end, is_dst=True)
             end = local_dt_end.astimezone(pytz.utc)
 
             local_submit = datetime.strptime(row[5], '%Y-%m-%dT%H:%M:%S')
-            local_dt_submit = local.localize(local_start, is_dst=None)
+            local_dt_submit = local.localize(local_submit, is_dst=True)
             submit = local_dt_submit.astimezone(pytz.utc)
 
             queue = str(row[6])
 
-            raw = str(row[7]) # Raw is the timelimit column
+            raw = str(row[7]) # Raw is the max_minutes column
             dash_position = raw.find('-')
             if (dash_position == 1):
                 found = []
@@ -124,7 +122,7 @@ def injection(connection, tableName):
                     m = int(hms[1])
                     s = int(hms[2]) * 0.0166667
 
-                    timelimit = day + h + m + s
+                    max_minutes = day + h + m + s
 
                 if len(found) == 1:
                     #print('\nDays-Hours:Minutes (D-H:M) Format')
@@ -137,7 +135,7 @@ def injection(connection, tableName):
                     h = int(hms[0]) * 60
                     m = int(hms[1])
 
-                    timelimit = day + h + m
+                    max_minutes = day + h + m
 
                 if re.search('\:', raw) is None:  # Working
                     #print('\nDay-Hour (DH) Format')
@@ -145,7 +143,7 @@ def injection(connection, tableName):
                     temp = re.split('[-]', raw)
                     day = int(temp[0]) * 1440  # The amount of minutes in a day
                     h = int(temp[1]) * 60
-                    timelimit = day + h
+                    max_minutes = day + h
             elif (dash_position == -1):  # .find() returns a -1 if the search case is not found
                 found = []
                 if re.search('\:', raw) is not None:
@@ -160,7 +158,7 @@ def injection(connection, tableName):
                     m = int(hms[1])
                     s = int(hms[2]) * 0.0166667
 
-                    timelimit = h + m + s
+                    max_minutes = h + m + s
 
                 if len(found) == 1:
                     #print('\nMinutes:Seconds (M:S) Format')
@@ -169,28 +167,25 @@ def injection(connection, tableName):
                     m = int(hms[0])
                     s = int(hms[1]) * 0.0166667
 
-                    timelimit = m + s
-                    print(timelimit)
+                    max_minutes = m + s
+
 
                 if re.search('\:', raw) is None:  # Working
                     #print('\nMinute (MM) Format')
                     #print(raw)
-                    timelimit = int(raw)
+                    max_minutes = int(raw)
 
             jobname = str(row[8])
 
-            state = str(row[9]) # <- Need to fix? It's a state, COMPLETED OR FAILED
+            state = str(row[9])
 
             nnodes = int(row[10])
             reqcpus = int(row[11])
             nodelist = str(row[12])
 
-            # %s = treated and presented as a string
-            # %d = treated as an integer and presented as a signed decimal number
-
             add_data = ("INSERT IGNORE INTO " + tableName +
-                        "(jobid, user, account, start, end, submit, queue, timelimit, jobname, state, nnodes, reqcpus, nodelist) "
-                        "VALUES (%(jobid)s, %(user)s, %(account)s, %(start)s, %(end)s, %(submit)s, %(queue)s, %(timelimit)s, %(jobname)s, %(state)s, %(nnodes)s, %(reqcpus)s, %(nodelist)s)")
+                        "(jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist) "
+                        "VALUES (%(jobid)s, %(user)s, %(account)s, %(start)s, %(end)s, %(submit)s, %(queue)s, %(max_minutes)s, %(jobname)s, %(state)s, %(nnodes)s, %(reqcpus)s, %(nodelist)s)")
 
             data = {
                 'jobid': jobid,
@@ -200,7 +195,7 @@ def injection(connection, tableName):
                 'end': end,
                 'submit': submit,
                 'queue': queue,
-                'timelimit': timelimit,
+                'max_minutes': max_minutes,
                 'jobname': jobname,
                 'state': state,
                 'nnodes': nnodes,
@@ -212,16 +207,29 @@ def injection(connection, tableName):
             }
 
             cursor.execute(add_data, data)
-
+    counter += 1
+    print(counter)
     # Commit after writing all the data of the current file into the table
     connection.commit()
     readIn.close()
     cursor.close()
 
+def sort():
+
+    source = '/home/ubuntu/jobs_data/Frontera'
+
+    os.chdir(source)
+
+    for filename in sorted(os.listdir(source)):
+        readIn = open(filename, 'r')
+        print('Current file being processed is: ', readIn)
+
 def main():
 
     tableName = input('Enter a name of a HPC machine you would like to access: ')
+
     connection = connect()
+
     createIfNotExists(connection, tableName)
     injection(connection, tableName)
 
