@@ -36,8 +36,6 @@ def createIfNotExists(connection, tableName):
     cursor.execute("CREATE TABLE IF NOT EXISTS " + tableName + " (jobid varchar(20) NOT NULL PRIMARY KEY, user varchar(80) NOT NULL, account varchar(50) NOT NULL, start datetime NOT NULL, end datetime NOT NULL, submit datetime NOT NULL, queue varchar(22) NOT NULL, max_minutes int unsigned NOT NULL, jobname varchar(50) NOT NULL, state varchar(20) NOT NULL, nnodes int unsigned NOT NULL, reqcpus int unsigned NOT NULL, nodelist TEXT NOT NULL)")
     tuple = cursor.fetchwarnings() # <- returns a list of tuples
 
-    cursor.execute("CREATE TABLE IF NOT EXISTS " + tableName + "")
-
     if tuple is None:
         print('New table generated\nCreating indexes')
         # ALl permissions granted, no warning message or message in general outputted to the user, no need for conditional statements
@@ -73,7 +71,7 @@ def injection(connection, tableName):
 
     os.chdir(source)
 
-    local = pytz.tbbbbimezone("US/Central")
+    local = pytz.timezone("US/Central")
     counter = 0
     for filename in os.listdir(source):
         readIn = open(filename, 'r')
@@ -207,10 +205,10 @@ def injection(connection, tableName):
             }
 
             cursor.execute(add_data, data)
-    counter += 1
-    print(counter)
-    # Commit after writing all the data of the current file into the table
-    connection.commit()
+        counter += 1
+        print(counter)
+        # Commit after writing all the data of the current file into the table
+        connection.commit()
     readIn.close()
     cursor.close()
 
