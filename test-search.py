@@ -73,6 +73,9 @@ def injection(connection, tableName):
 
     local = pytz.timezone("US/Central")
     counter = 0
+
+    start = datetime.now()
+    print('Start: ', start)
     for filename in os.listdir(source):
         readIn = open(filename, 'r')
         next(readIn)
@@ -209,8 +212,14 @@ def injection(connection, tableName):
         print(counter)
         # Commit after writing all the data of the current file into the table
         connection.commit()
+    end = datetime.now()
     readIn.close()
     cursor.close()
+
+  
+    print('End: ', end)
+   # rn = end - start
+   # print('Total Run time: ', rn)
 
 def sort():
 
