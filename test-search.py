@@ -10,10 +10,22 @@ from typing import List
 import socket
 import math
 import shutil
+import time
+
+# ---------------------------------------------------
+# GLOBAL variables and constants.
+total_errors = 0;
+total_files_skipped = 0
+filecount = 0
+
+# Number of pipe-separated fields in raw input files
+SHORT_RECORD_LEN = 13
+QOS_RECORD_LEN = 14
+# ---------------------------------------------------
 
 def connect():
 
-    connection = mysql.connector.connect(host="127.0.0.1", user='costaki', passwd='password', database="HPC_Job_Time_Data")
+    connection = mysql.connector.connect(host="localhost", user='root', passwd='password', database="HPC_Job_Time_Data")
 
     print('\nSuccessfully Connected to SQL Database')
 
@@ -33,11 +45,11 @@ def createIfNotExists(connection, tableName):
     connection.get_warnings = True
     cursor = connection.cursor()
 
-    cursor.execute("CREATE TABLE IF NOT EXISTS " + tableName + " (jobid varchar(20) NOT NULL PRIMARY KEY, user varchar(80) NOT NULL, account varchar(50) NOT NULL, start datetime NOT NULL, end datetime NOT NULL, submit datetime NOT NULL, queue varchar(22) NOT NULL, max_minutes int unsigned NOT NULL, jobname varchar(50) NOT NULL, state varchar(20) NOT NULL, nnodes int unsigned NOT NULL, reqcpus int unsigned NOT NULL, nodelist TEXT NOT NULL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS " + tableName + " (jobid varchar(30) NOT NULL PRIMARY KEY, user varchar(80) NOT NULL, account varchar(60) NOT NULL, start datetime NOT NULL, end datetime NOT NULL, submit datetime NOT NULL, queue varchar(30) NOT NULL, max_minutes int unsigned NOT NULL, jobname varchar(60) NOT NULL, state varchar(20) NOT NULL, nnodes int unsigned NOT NULL, reqcpus int unsigned NOT NULL, nodelist TEXT NOT NULL, qos varchar(20))")
     tuple = cursor.fetchwarnings() # <- returns a list of tuples
 
     if tuple is None:
-        print('New table generated\nCreating indexes')
+        print('New table generated')
         # ALl permissions granted, no warning message or message in general outputted to the user, no need for conditional statements
 
         cursor.execute('CREATE INDEX index_jobid ON HPC_Job_Time_Data.' + tableName + '(jobid)')
@@ -55,32 +67,64 @@ def createIfNotExists(connection, tableName):
         cursor.execute('CREATE INDEX index_nnodes ON HPC_Job_Time_Data.' + tableName + '(nnodes)')
         cursor.execute('CREATE INDEX index_reqcpus ON HPC_Job_Time_Data.' + tableName + '(reqcpus)')
         #cursor.execute('CREATE INDEX index_nodelist ON HPC_Job_Time_Data.' + tableName + '(nodelist)')
+        cursor.execute('CREATE INDEX index_qos ON HPC_Job_Time_Data.' + tableName + '(qos)')
 
         connection.commit() # Commits any tables and indices that were created to the database
-        print('\nIndexes created')
+        print('Indexes created\n')
     elif(tuple[0][1] == 1050):
-        print('\nTable already exists')
+        print('Table already exists\n')
 
     cursor.close()
 
 def injection(connection, tableName):
 
-    cursor = connection.cursor()
-
-    source = '/home/ubuntu/jobs_data/' + tableName
+    # source = '/home/ubuntu/jobs_data/' + tableName
+    source = '/home/rcardone/work/smartsched/hpc/' + tableName
 
     os.chdir(source)
 
     local = pytz.timezone("US/Central")
-    counter = 0
+    global filecount
+    global total_errors
+    global total_files_skipped
 
     start = datetime.now()
     print('Start: ', start)
-    for filename in os.listdir(source):
+    for filename in sorted(os.listdir(source)):
+        
+        # Skip directories.
+        if not os.path.isfile(filename):
+            continue
+            
+        # Open a new cursor in existing connection.
+        cursor = connection.cursor()
+        
+        # Read the first line of the file to determine the record format.
         readIn = open(filename, 'r')
-        next(readIn)
+        firstline = next(readIn)
+        
+        # Establish this file's record size.
+        record_size = len(firstline.split('|'))
+        if record_size != SHORT_RECORD_LEN and record_size != QOS_RECORD_LEN:
+            total_errors += 1
+            print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename)
+            continue
+        
+        # Read the rest of the file line by line.
+        lineno = 1
         for line in readIn:
+            # Assign line number
+            lineno += 1
+            
+            # Parse next line and validate number of fields.
             row = line.split('|')
+            size = len(row)
+            if size != record_size: 
+                total_files_skipped += 1
+                print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line", lineno)
+                continue
+            
+            # Assign fields from left to right.
             jobid = str(row[0])
             user = str(row[1])
             account = str(row[2])
@@ -180,13 +224,18 @@ def injection(connection, tableName):
 
             state = str(row[9])
 
-            nnodes = int(row[10])
-            reqcpus = int(row[11])
+            nnodes = intTryParse(row[10], filename, lineno)
+            reqcpus = intTryParse(row[11], filename, lineno)
             nodelist = str(row[12])
+            
+            # Optional fields depending on record length.
+            qos = None
+            if record_size == QOS_RECORD_LEN:
+                qos = str(row[13])
 
             add_data = ("INSERT IGNORE INTO " + tableName +
-                        "(jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist) "
-                        "VALUES (%(jobid)s, %(user)s, %(account)s, %(start)s, %(end)s, %(submit)s, %(queue)s, %(max_minutes)s, %(jobname)s, %(state)s, %(nnodes)s, %(reqcpus)s, %(nodelist)s)")
+                        "(jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist, qos) "
+                        "VALUES (%(jobid)s, %(user)s, %(account)s, %(start)s, %(end)s, %(submit)s, %(queue)s, %(max_minutes)s, %(jobname)s, %(state)s, %(nnodes)s, %(reqcpus)s, %(nodelist)s, %(qos)s)")
 
             data = {
                 'jobid': jobid,
@@ -200,36 +249,48 @@ def injection(connection, tableName):
                 'jobname': jobname,
                 'state': state,
                 'nnodes': nnodes,
-                'jobname': jobname,
-                'state': state,
-                'nnodes': nnodes,
                 'reqcpus': reqcpus,
                 'nodelist': nodelist,
+                'qos': qos,
             }
 
             cursor.execute(add_data, data)
-        counter += 1
-        print(counter)
         # Commit after writing all the data of the current file into the table
         connection.commit()
-    end = datetime.now()
-    readIn.close()
-    cursor.close()
+        
+        # Print progress message over the last message without newline.
+        filecount += 1
+        progress = "Last file committed: " + str(filecount) + " - " + filename + "       "
+        print(progress, end='\r')
 
-  
-    print('End: ', end)
+        # Clean up.
+        cursor.close()
+        readIn.close()
+        
+
+    end = datetime.now()
+    print('\nEnd: ', end)
    # rn = end - start
    # print('Total Run time: ', rn)
 
-def sort():
+def intTryParse(value, filename, lineno):
+    try:
+        return int(value)
+    except:
+        global total_errors
+        total_errors += 1
+        print("\nERROR: Integer conversion in file ", filename, "line", lineno)
+        return 0
 
-    source = '/home/ubuntu/jobs_data/Frontera'
-
-    os.chdir(source)
-
-    for filename in sorted(os.listdir(source)):
-        readIn = open(filename, 'r')
-        print('Current file being processed is: ', readIn)
+#def sort():
+#
+#    source = '/home/richcar/work/smartsched/hpc/'
+#
+#    os.chdir(source)
+#
+#    for filename in sorted(os.listdir(source)):
+#        readIn = open(filename, 'r')
+#        print('Current file being processed is: ', readIn)
 
 def main():
 
@@ -239,6 +300,10 @@ def main():
 
     createIfNotExists(connection, tableName)
     injection(connection, tableName)
+    
+    print("Total record errors: ", total_errors)
+    print("Total files skipped: ", total_files_skipped
+    print("Total files read: ", filecount)
 
     connection.close()
 
