@@ -18,11 +18,11 @@ import time
 # Before running this program assign the following parameters
 # that are valid in your environment.
 
-my_host = "localhost"
-my_user = "root"
-my_passwd = "password"
-my_database = "HPC_Job_Time_Data"  # the default should be 'hpc'
-my_parent_dir = "/home/rcardone/work/smartsched/hpc/"
+my_host = "localhost"              # host on which mysql runs
+my_user = "root"                   # db user that can create databases and tables
+my_passwd = "password"             # db user password
+my_database = "HPC_Job_Time_Data"  # the mysql datagbase into which all hpc records are written (hpc)
+my_parent_dir = "/home/rcardone/work/smartsched/hpc/" # the parent directory of the hpc-specific input directories 
 # **************************************************************
 
 # ---------------------------------------------------
