@@ -12,6 +12,19 @@ import math
 import shutil
 import time
 
+# **************************************************************
+# ASSIGN THESE RUNTIME PARAMETERS FOR YOUR ENVIRONMENT
+#
+# Before running this program assign the following parameters
+# that are valid in your environment.
+
+my_host = "localhost"
+my_user = "root"
+my_passwd = "password"
+my_database = "HPC_Job_Time_Data"  # the default should be 'hpc'
+my_parent_dir = "/home/rcardone/work/smartsched/hpc/"
+# **************************************************************
+
 # ---------------------------------------------------
 # GLOBAL variables and constants.
 total_errors = 0;
@@ -25,9 +38,9 @@ QOS_RECORD_LEN = 14
 
 def connect():
 
-    connection = mysql.connector.connect(host="localhost", user='root', passwd='password', database="HPC_Job_Time_Data")
+    connection = mysql.connector.connect(host=my_host, user=my_user, passwd=my_passwd, database=my_database)
 
-    print('\nSuccessfully Connected to SQL Database')
+    print('\nSuccessfully Connected to SQL Database:', my_database)
 
     return connection
 
@@ -51,23 +64,24 @@ def createIfNotExists(connection, tableName):
     if tuple is None:
         print('New table generated')
         # ALl permissions granted, no warning message or message in general outputted to the user, no need for conditional statements
+        dbspec = my_database + '.' + tableName
+        
+        cursor.execute('CREATE INDEX index_jobid ON ' + dbspec + '(jobid)')
+        cursor.execute('CREATE INDEX index_user ON ' + dbspec + '(user)')
+        cursor.execute('CREATE INDEX index_account ON ' + dbspec + '(account)')
 
-        cursor.execute('CREATE INDEX index_jobid ON HPC_Job_Time_Data.' + tableName + '(jobid)')
-        cursor.execute('CREATE INDEX index_user ON HPC_Job_Time_Data.' + tableName + '(user)')
-        cursor.execute('CREATE INDEX index_account ON HPC_Job_Time_Data.' + tableName + '(account)')
+        cursor.execute('CREATE INDEX index_submit ON ' + dbspec + '(submit)')
+        cursor.execute('CREATE INDEX index_start ON ' + dbspec + '(start)')
+        cursor.execute('CREATE INDEX index_end ON ' + dbspec + '(end)')
 
-        cursor.execute('CREATE INDEX index_submit ON HPC_Job_Time_Data.' + tableName + '(submit)')
-        cursor.execute('CREATE INDEX index_start ON HPC_Job_Time_Data.' + tableName + '(start)')
-        cursor.execute('CREATE INDEX index_end ON HPC_Job_Time_Data.' + tableName + '(end)')
+        cursor.execute('CREATE INDEX index_queue ON ' + dbspec + '(queue)')
+        cursor.execute('CREATE INDEX index_max_minutes ON ' + dbspec + '(max_minutes)')
+        cursor.execute('CREATE INDEX index_state ON ' + dbspec + '(state)')
 
-        cursor.execute('CREATE INDEX index_queue ON HPC_Job_Time_Data.' + tableName + '(queue)')
-        cursor.execute('CREATE INDEX index_max_minutes ON HPC_Job_Time_Data.' + tableName + '(max_minutes)')
-        cursor.execute('CREATE INDEX index_state ON HPC_Job_Time_Data.' + tableName + '(state)')
-
-        cursor.execute('CREATE INDEX index_nnodes ON HPC_Job_Time_Data.' + tableName + '(nnodes)')
-        cursor.execute('CREATE INDEX index_reqcpus ON HPC_Job_Time_Data.' + tableName + '(reqcpus)')
-        #cursor.execute('CREATE INDEX index_nodelist ON HPC_Job_Time_Data.' + tableName + '(nodelist)')
-        cursor.execute('CREATE INDEX index_qos ON HPC_Job_Time_Data.' + tableName + '(qos)')
+        cursor.execute('CREATE INDEX index_nnodes ON ' + dbspec + '(nnodes)')
+        cursor.execute('CREATE INDEX index_reqcpus ON ' + dbspec + '(reqcpus)')
+        #cursor.execute('CREATE INDEX index_nodelist ON ' + dbspec + '(nodelist)')
+        cursor.execute('CREATE INDEX index_qos ON ' + dbspec + '(qos)')
 
         connection.commit() # Commits any tables and indices that were created to the database
         print('Indexes created\n')
@@ -78,8 +92,8 @@ def createIfNotExists(connection, tableName):
 
 def injection(connection, tableName):
 
-    # source = '/home/ubuntu/jobs_data/' + tableName
-    source = '/home/rcardone/work/smartsched/hpc/' + tableName
+    # Assign the actual directory that contains all the input files.
+    source = my_parent_dir + tableName
 
     os.chdir(source)
 
@@ -106,7 +120,7 @@ def injection(connection, tableName):
         # Establish this file's record size.
         record_size = len(firstline.split('|'))
         if record_size != SHORT_RECORD_LEN and record_size != QOS_RECORD_LEN:
-            total_errors += 1
+            total_files_skipped += 1
             print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename)
             continue
         
@@ -120,7 +134,7 @@ def injection(connection, tableName):
             row = line.split('|')
             size = len(row)
             if size != record_size: 
-                total_files_skipped += 1
+                total_errors += 1
                 print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line", lineno)
                 continue
             
@@ -272,7 +286,7 @@ def injection(connection, tableName):
     print('\nEnd: ', end)
    # rn = end - start
    # print('Total Run time: ', rn)
-
+   
 def intTryParse(value, filename, lineno):
     try:
         return int(value)
@@ -281,16 +295,6 @@ def intTryParse(value, filename, lineno):
         total_errors += 1
         print("\nERROR: Integer conversion in file ", filename, "line", lineno)
         return 0
-
-#def sort():
-#
-#    source = '/home/richcar/work/smartsched/hpc/'
-#
-#    os.chdir(source)
-#
-#    for filename in sorted(os.listdir(source)):
-#        readIn = open(filename, 'r')
-#        print('Current file being processed is: ', readIn)
 
 def main():
 
@@ -302,7 +306,7 @@ def main():
     injection(connection, tableName)
     
     print("Total record errors: ", total_errors)
-    print("Total files skipped: ", total_files_skipped
+    print("Total files skipped: ", total_files_skipped)
     print("Total files read: ", filecount)
 
     connection.close()
