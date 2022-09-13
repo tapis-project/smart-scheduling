@@ -57,12 +57,20 @@ Open up MySQL Workbench and click the plus sign by the "MySQL Connections".
 
 Set up the connection name, it may be whatever you would like it to be. Leave the hostname
 variable set to "127.0.0.1", which is the IP address of your local machine. You may leave the username to 'root' and the password
-as what you had previously set up, or change it to a user you had previously set up. 
+as what you had previously set up, or change it to a user you had previously set up. To create a user,
+continue reading below
 
 Go ahead and test the connection. After a successful connection, close the window and click on the connection instantiation. 
 
 Click on the cylinder with the line through it and create a new database or 'schema'. 
 Give it whatever name you would like and save the instance. 
+
+To create a new user with full privileges, in the connection instance, click on
+```Server```, followed by ```Users and Privileges``` and selecting ```Add Account```.
+In the ```Admistrative Roles``` tab, select all the user privileges you would like for this
+user to have and click on save. Go back and click on the house icon and right-click on the
+connection instance and select ```Edit Connection```. Here, replace the username and password values
+with the new user you created and save. Make sure to test the connection be sure everything is set up correctly.
 
 Take the username, password, and database values that you previously created, open up ```test-search.py``` and replace 
 the preconditioned values previously mentioned above and replace them with your own values. You can also change the path where the job data is 
