@@ -15,37 +15,81 @@ import time
 # **************************************************************
 # ASSIGN THESE RUNTIME PARAMETERS FOR YOUR ENVIRONMENT
 #
-# Before running this program assign the following parameters
+# These systematic information variables are necessary to run this script.
+# Below are precreated instances, but they need to change based on a user-by-user basis due to information such as naming changing.
+# Before running this program, assign the following parameters
 # that are valid in your environment.
+# For further instructions on what these variables mean, and how to update them for this program to run properly,
+# please read the README.md in the Github repository this script was found.
 
-my_host = "localhost"              # host on which mysql runs
-my_user = "root"                   # db user that can create databases and tables
-my_passwd = "password"             # db user password
-my_database = "HPC_Job_Time_Data"  # the mysql datagbase into which all hpc records are written (hpc)
-my_parent_dir = "/home/rcardone/work/smartsched/hpc/" # the parent directory of the hpc-specific input directories 
+
+my_host = "localhost"  # The host variable that the MySQL Database is created on (IE. IP address or local network)
+my_user = "root"  # Connection instance username that has the ability to create and modify tables, indexes and databases
+my_passwd = "password"  # Password for the user with the access mentioned on the line above
+my_database = "HPC_Job_Time_Data"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
+my_parent_dir = "/home/ubuntu/jobs_data/"  # The parent directory of the HPC-specific input directories that host the submitted job data that will be inserted into the MySQL table
 # **************************************************************
 
 # ---------------------------------------------------
 # GLOBAL variables and constants.
-total_errors = 0;
+total_errors = 0
 total_files_skipped = 0
 filecount = 0
 
 # Number of pipe-separated fields in raw input files
 SHORT_RECORD_LEN = 13
 QOS_RECORD_LEN = 14
+
+
 # ---------------------------------------------------
 
 def connect():
 
     connection = mysql.connector.connect(host=my_host, user=my_user, passwd=my_passwd, database=my_database)
 
-    print('\nSuccessfully Connected to SQL Database:', my_database)
+    print('\nSuccessfully Connected to your MySQL Database:', my_database)
 
     return connection
 
-def createIfNotExists(connection, tableName):
+def connectGen():
+    # This function is general connection to the MySQL connection instance to look at the available databases
+    # Is used in createDatabase() function to create a database if it doesn't exist already
+    genConnection = mysql.connector.connect(host=my_host, user=my_user, passwd=my_passwd)
 
+    print('\nSuccessfully Connected to MySQL Workbench')
+    cursor = genConnection.cursor()
+
+    print('\nList of available databases:')
+    cursor.execute('SHOW DATABASES')
+    for x in cursor:
+        print(x)
+
+    return genConnection
+
+def createDatabase(genConnection, databaseName):
+
+    if databaseName == "": # No user input, as such use the default database name from the above section
+        print('Default database in use...')
+
+    else: # Else, set the my_database variable to the new user inputted one, create if not exists by general cursor
+        global my_database
+        my_database = databaseName
+        genConnection.get_warnings = True
+        cursor = genConnection.cursor()
+
+        cursor.execute("CREATE DATABASE IF NOT EXISTS " + databaseName)
+        tuple = cursor.fetchwarnings()
+
+        if tuple is None:
+            cursor.execute("SHOW DATABASES")
+            for x in cursor:
+                print(x)
+        elif(tuple[0][1] == 1007):
+            print('\nDatabase already exists')
+
+        cursor.close()
+
+def createTable(connection, tableName):
     '''
 
     :param connection: Connection parameter to the SQL database
@@ -58,14 +102,15 @@ def createIfNotExists(connection, tableName):
     connection.get_warnings = True
     cursor = connection.cursor()
 
-    cursor.execute("CREATE TABLE IF NOT EXISTS " + tableName + " (jobid varchar(30) NOT NULL PRIMARY KEY, user varchar(80) NOT NULL, account varchar(60) NOT NULL, start datetime NOT NULL, end datetime NOT NULL, submit datetime NOT NULL, queue varchar(30) NOT NULL, max_minutes int unsigned NOT NULL, jobname varchar(60) NOT NULL, state varchar(20) NOT NULL, nnodes int unsigned NOT NULL, reqcpus int unsigned NOT NULL, nodelist TEXT NOT NULL, qos varchar(20))")
-    tuple = cursor.fetchwarnings() # <- returns a list of tuples
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS " + tableName + " (jobid varchar(30) NOT NULL PRIMARY KEY, user varchar(80) NOT NULL, account varchar(60) NOT NULL, start datetime NOT NULL, end datetime NOT NULL, submit datetime NOT NULL, queue varchar(30) NOT NULL, max_minutes int unsigned NOT NULL, jobname varchar(60) NOT NULL, state varchar(20) NOT NULL, nnodes int unsigned NOT NULL, reqcpus int unsigned NOT NULL, nodelist TEXT NOT NULL, qos varchar(20))")
+    tuple = cursor.fetchwarnings()  # <- returns a list of tuples
 
     if tuple is None:
         print('New table generated')
         # ALl permissions granted, no warning message or message in general outputted to the user, no need for conditional statements
         dbspec = my_database + '.' + tableName
-        
+
         cursor.execute('CREATE INDEX index_jobid ON ' + dbspec + '(jobid)')
         cursor.execute('CREATE INDEX index_user ON ' + dbspec + '(user)')
         cursor.execute('CREATE INDEX index_account ON ' + dbspec + '(account)')
@@ -80,18 +125,17 @@ def createIfNotExists(connection, tableName):
 
         cursor.execute('CREATE INDEX index_nnodes ON ' + dbspec + '(nnodes)')
         cursor.execute('CREATE INDEX index_reqcpus ON ' + dbspec + '(reqcpus)')
-        #cursor.execute('CREATE INDEX index_nodelist ON ' + dbspec + '(nodelist)')
+        # cursor.execute('CREATE INDEX index_nodelist ON ' + dbspec + '(nodelist)')
         cursor.execute('CREATE INDEX index_qos ON ' + dbspec + '(qos)')
 
-        connection.commit() # Commits any tables and indices that were created to the database
+        connection.commit()  # Commits any tables and indices that were created to the database
         print('Indexes created\n')
-    elif(tuple[0][1] == 1050):
+    elif (tuple[0][1] == 1050):
         print('Table already exists\n')
 
     cursor.close()
 
 def injection(connection, tableName):
-
     # Assign the actual directory that contains all the input files.
     source = my_parent_dir + tableName
 
@@ -105,39 +149,40 @@ def injection(connection, tableName):
     start = datetime.now()
     print('Start: ', start)
     for filename in sorted(os.listdir(source)):
-        
+
         # Skip directories.
         if not os.path.isfile(filename):
             continue
-            
+
         # Open a new cursor in existing connection.
         cursor = connection.cursor()
-        
+
         # Read the first line of the file to determine the record format.
         readIn = open(filename, 'r')
         firstline = next(readIn)
-        
+
         # Establish this file's record size.
         record_size = len(firstline.split('|'))
         if record_size != SHORT_RECORD_LEN and record_size != QOS_RECORD_LEN:
             total_files_skipped += 1
             print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename)
             continue
-        
+
         # Read the rest of the file line by line.
         lineno = 1
         for line in readIn:
             # Assign line number
             lineno += 1
-            
+
             # Parse next line and validate number of fields.
             row = line.split('|')
             size = len(row)
-            if size != record_size: 
+            if size != record_size:
                 total_errors += 1
-                print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line", lineno)
+                print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line",
+                      lineno)
                 continue
-            
+
             # Assign fields from left to right.
             jobid = str(row[0])
             user = str(row[1])
@@ -160,7 +205,7 @@ def injection(connection, tableName):
 
             queue = str(row[6])
 
-            raw = str(row[7]) # Raw is the max_minutes column
+            raw = str(row[7])  # Raw is the max_minutes column
             dash_position = raw.find('-')
             if (dash_position == 1):
                 found = []
@@ -168,8 +213,8 @@ def injection(connection, tableName):
                     for i in re.finditer('\:', raw):
                         found.append(i.start(0))
                 if len(found) == 2:
-                    #print('\nDays-Hours:Minutes:Seconds (D-H:M:S) Format')
-                    #print(raw)
+                    # print('\nDays-Hours:Minutes:Seconds (D-H:M:S) Format')
+                    # print(raw)
 
                     temp = re.split('[-]', raw)
                     day = int(temp[0]) * 1440  # The amount of minutes in a day
@@ -184,8 +229,8 @@ def injection(connection, tableName):
                     max_minutes = day + h + m + s
 
                 if len(found) == 1:
-                    #print('\nDays-Hours:Minutes (D-H:M) Format')
-                    #print(raw)
+                    # print('\nDays-Hours:Minutes (D-H:M) Format')
+                    # print(raw)
                     temp = re.split('[-]', raw)
                     day = int(temp[0]) * 1440  # The amount of minutes in a day
 
@@ -197,8 +242,8 @@ def injection(connection, tableName):
                     max_minutes = day + h + m
 
                 if re.search('\:', raw) is None:  # Working
-                    #print('\nDay-Hour (DH) Format')
-                    #print(raw)
+                    # print('\nDay-Hour (DH) Format')
+                    # print(raw)
                     temp = re.split('[-]', raw)
                     day = int(temp[0]) * 1440  # The amount of minutes in a day
                     h = int(temp[1]) * 60
@@ -210,8 +255,8 @@ def injection(connection, tableName):
                         found.append(i.start(0))
 
                 if len(found) == 2:
-                    #print('\nHours:Minutes:Seconds (H:M:S) Format')
-                    #print(raw)
+                    # print('\nHours:Minutes:Seconds (H:M:S) Format')
+                    # print(raw)
                     hms = re.split('[:]', raw)
                     h = int(hms[0]) * 60
                     m = int(hms[1])
@@ -220,18 +265,17 @@ def injection(connection, tableName):
                     max_minutes = h + m + s
 
                 if len(found) == 1:
-                    #print('\nMinutes:Seconds (M:S) Format')
-                    #print(raw)
+                    # print('\nMinutes:Seconds (M:S) Format')
+                    # print(raw)
                     hms = re.split('[:]', raw)
                     m = int(hms[0])
                     s = int(hms[1]) * 0.0166667
 
                     max_minutes = m + s
 
-
                 if re.search('\:', raw) is None:  # Working
-                    #print('\nMinute (MM) Format')
-                    #print(raw)
+                    # print('\nMinute (MM) Format')
+                    # print(raw)
                     max_minutes = int(raw)
 
             jobname = str(row[8])
@@ -241,7 +285,7 @@ def injection(connection, tableName):
             nnodes = intTryParse(row[10], filename, lineno)
             reqcpus = intTryParse(row[11], filename, lineno)
             nodelist = str(row[12])
-            
+
             # Optional fields depending on record length.
             qos = None
             if record_size == QOS_RECORD_LEN:
@@ -271,7 +315,7 @@ def injection(connection, tableName):
             cursor.execute(add_data, data)
         # Commit after writing all the data of the current file into the table
         connection.commit()
-        
+
         # Print progress message over the last message without newline.
         filecount += 1
         progress = "Last file committed: " + str(filecount) + " - " + filename + "       "
@@ -280,13 +324,10 @@ def injection(connection, tableName):
         # Clean up.
         cursor.close()
         readIn.close()
-        
 
     end = datetime.now()
     print('\nEnd: ', end)
-   # rn = end - start
-   # print('Total Run time: ', rn)
-   
+
 def intTryParse(value, filename, lineno):
     try:
         return int(value)
@@ -298,18 +339,21 @@ def intTryParse(value, filename, lineno):
 
 def main():
 
-    tableName = input('Enter a name of a HPC machine you would like to access: ')
+    genConnection = connectGen() # Generally connect to MySQL Workbench
+    databaseName = input('\nEnter the name of the MySQL database you would like to create your data tables in. If no name is inputted, the default database value will be used: ')
+    createDatabase(genConnection, databaseName) # Checks to see if the inputted database name is equal to the default name or not, if not, create new database to access and create tables in
 
     connection = connect()
-
-    createIfNotExists(connection, tableName)
+    tableName = input('Enter a name of a HPC machine you would like to store your job data into: ')
+    createTable(connection, tableName)
     injection(connection, tableName)
-    
+
     print("Total record errors: ", total_errors)
     print("Total files skipped: ", total_files_skipped)
     print("Total files read: ", filecount)
 
     connection.close()
+
 
 if __name__ == '__main__':
     main()
