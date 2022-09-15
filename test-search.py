@@ -135,6 +135,83 @@ def createTable(connection, tableName):
 
     cursor.close()
 
+
+def timeConeversion(raw):
+    # Takes the "raw" minutes column and converting into a standard format based on raw data column format
+    dash_position = raw.find('-')
+    if (dash_position == 1):
+        found = []
+        if re.search('\:', raw) is not None:
+            for i in re.finditer('\:', raw):
+                found.append(i.start(0))
+        if len(found) == 2:
+            # print('\nDays-Hours:Minutes:Seconds (D-H:M:S) Format')
+            # print(raw)
+
+            temp = re.split('[-]', raw)
+            day = int(temp[0]) * 1440  # The amount of minutes in a day
+
+            temp1 = temp[1]
+            hms = re.split('[:]', temp1)
+
+            h = int(hms[0]) * 60
+            m = int(hms[1])
+            s = int(hms[2]) * 0.0166667
+
+            max_minutes = day + h + m + s
+
+        if len(found) == 1:
+            # print('\nDays-Hours:Minutes (D-H:M) Format')
+            # print(raw)
+            temp = re.split('[-]', raw)
+            day = int(temp[0]) * 1440  # The amount of minutes in a day
+
+            temp1 = temp[1]
+            hms = re.split('[:]', temp1)
+            h = int(hms[0]) * 60
+            m = int(hms[1])
+
+            max_minutes = day + h + m
+
+        if re.search('\:', raw) is None:  # Working
+            # print('\nDay-Hour (DH) Format')
+            # print(raw)
+            temp = re.split('[-]', raw)
+            day = int(temp[0]) * 1440  # The amount of minutes in a day
+            h = int(temp[1]) * 60
+            max_minutes = day + h
+    elif (dash_position == -1):  # .find() returns a -1 if the search case is not found
+        found = []
+        if re.search('\:', raw) is not None:
+            for i in re.finditer('\:', raw):
+                found.append(i.start(0))
+
+        if len(found) == 2:
+            # print('\nHours:Minutes:Seconds (H:M:S) Format')
+            # print(raw)
+            hms = re.split('[:]', raw)
+            h = int(hms[0]) * 60
+            m = int(hms[1])
+            s = int(hms[2]) * 0.0166667
+
+            max_minutes = h + m + s
+
+        if len(found) == 1:
+            # print('\nMinutes:Seconds (M:S) Format')
+            # print(raw)
+            hms = re.split('[:]', raw)
+            m = int(hms[0])
+            s = int(hms[1]) * 0.0166667
+
+            max_minutes = m + s
+
+        if re.search('\:', raw) is None:  # Working
+            # print('\nMinute (MM) Format')
+            # print(raw)
+            max_minutes = int(raw)
+
+    return max_minutes
+
 def injection(connection, tableName):
     # Assign the actual directory that contains all the input files.
     source = my_parent_dir + tableName
@@ -206,77 +283,7 @@ def injection(connection, tableName):
             queue = str(row[6])
 
             raw = str(row[7])  # Raw is the max_minutes column
-            dash_position = raw.find('-')
-            if (dash_position == 1):
-                found = []
-                if re.search('\:', raw) is not None:
-                    for i in re.finditer('\:', raw):
-                        found.append(i.start(0))
-                if len(found) == 2:
-                    # print('\nDays-Hours:Minutes:Seconds (D-H:M:S) Format')
-                    # print(raw)
-
-                    temp = re.split('[-]', raw)
-                    day = int(temp[0]) * 1440  # The amount of minutes in a day
-
-                    temp1 = temp[1]
-                    hms = re.split('[:]', temp1)
-
-                    h = int(hms[0]) * 60
-                    m = int(hms[1])
-                    s = int(hms[2]) * 0.0166667
-
-                    max_minutes = day + h + m + s
-
-                if len(found) == 1:
-                    # print('\nDays-Hours:Minutes (D-H:M) Format')
-                    # print(raw)
-                    temp = re.split('[-]', raw)
-                    day = int(temp[0]) * 1440  # The amount of minutes in a day
-
-                    temp1 = temp[1]
-                    hms = re.split('[:]', temp1)
-                    h = int(hms[0]) * 60
-                    m = int(hms[1])
-
-                    max_minutes = day + h + m
-
-                if re.search('\:', raw) is None:  # Working
-                    # print('\nDay-Hour (DH) Format')
-                    # print(raw)
-                    temp = re.split('[-]', raw)
-                    day = int(temp[0]) * 1440  # The amount of minutes in a day
-                    h = int(temp[1]) * 60
-                    max_minutes = day + h
-            elif (dash_position == -1):  # .find() returns a -1 if the search case is not found
-                found = []
-                if re.search('\:', raw) is not None:
-                    for i in re.finditer('\:', raw):
-                        found.append(i.start(0))
-
-                if len(found) == 2:
-                    # print('\nHours:Minutes:Seconds (H:M:S) Format')
-                    # print(raw)
-                    hms = re.split('[:]', raw)
-                    h = int(hms[0]) * 60
-                    m = int(hms[1])
-                    s = int(hms[2]) * 0.0166667
-
-                    max_minutes = h + m + s
-
-                if len(found) == 1:
-                    # print('\nMinutes:Seconds (M:S) Format')
-                    # print(raw)
-                    hms = re.split('[:]', raw)
-                    m = int(hms[0])
-                    s = int(hms[1]) * 0.0166667
-
-                    max_minutes = m + s
-
-                if re.search('\:', raw) is None:  # Working
-                    # print('\nMinute (MM) Format')
-                    # print(raw)
-                    max_minutes = int(raw)
+            max_minutes = timeConeversion(raw)
 
             jobname = str(row[8])
 
