@@ -323,7 +323,7 @@ def injection(connection, tableName):
                 cursor.execute(add_data, data)
                 cursor.execute("UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'") # Update the LRF of row of correct HPCID with correct LRF
             # Commit after writing all the data of the current file into the table
-        else:
+        elif lastReadinFile == filename:
             continue
         connection.commit()
 
