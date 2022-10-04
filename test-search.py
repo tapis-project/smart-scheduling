@@ -39,8 +39,6 @@ filecount = 0
 # Number of pipe-separated fields in raw input files
 SHORT_RECORD_LEN = 13
 QOS_RECORD_LEN = 14
-
-
 # ---------------------------------------------------
 
 def connect():
@@ -59,10 +57,10 @@ def connectGen():
     print('\nSuccessfully Connected to MySQL Workbench')
     cursor = genConnection.cursor()
 
-    print('\nList of available databases:')
-    cursor.execute('SHOW DATABASES')
-    for x in cursor:
-        print(x)
+    #print('\nList of available databases:')
+    #cursor.execute('SHOW DATABASES')
+    #for x in cursor:
+    #    print(x)
 
     return genConnection
 
@@ -90,14 +88,6 @@ def createDatabase(genConnection, databaseName):
         cursor.close()
 
 def createTable(connection, tableName):
-    '''
-
-    :param connection: Connection parameter to the SQL database
-    :param cursor: Cursor element that allows access to different tools in the SQL database
-    :param tableName: User provided tableName
-    :return: Returns print statement based off condition whether a table was created if it did not exist, as well as indices that would be created if the table did not exist
-
-    '''
 
     connection.get_warnings = True
     cursor = connection.cursor()
@@ -106,6 +96,7 @@ def createTable(connection, tableName):
         "CREATE TABLE IF NOT EXISTS " + tableName + " (jobid varchar(30) NOT NULL PRIMARY KEY, user varchar(80) NOT NULL, account varchar(60) NOT NULL, start datetime NOT NULL, end datetime NOT NULL, submit datetime NOT NULL, queue varchar(30) NOT NULL, max_minutes int unsigned NOT NULL, jobname varchar(60) NOT NULL, state varchar(20) NOT NULL, nnodes int unsigned NOT NULL, reqcpus int unsigned NOT NULL, nodelist TEXT NOT NULL, qos varchar(20))")
     tuple = cursor.fetchwarnings()  # <- returns a list of tuples
 
+    cursor.execute("CREATE TABLE IF NOT EXISTS lastReadin (hpcID varchar(30) NOT NULL UNIQUE, lastReadinFile varchar(30) NOT NULL) ")
     if tuple is None:
         print('New table generated')
         # ALl permissions granted, no warning message or message in general outputted to the user, no need for conditional statements
@@ -133,10 +124,19 @@ def createTable(connection, tableName):
     elif (tuple[0][1] == 1050):
         print('Table already exists\n')
 
+    date = '1999-01-01.txt'
+
+    add_data = ("INSERT IGNORE INTO lastReadin (hpcID, lastReadinFile) "
+                "VALUES (%(hpcID)s, %(lastReadinFile)s)")
+    data = {
+        'hpcID': tableName,
+        'lastReadinFile': date,
+    }
+    cursor.execute(add_data, data, multi=True)
+    connection.commit()
     cursor.close()
 
-
-def timeConeversion(raw):
+def timeConversion(raw):
     # Takes the "raw" minutes column and converting into a standard format based on raw data column format
     dash_position = raw.find('-')
     if (dash_position == 1):
@@ -145,9 +145,7 @@ def timeConeversion(raw):
             for i in re.finditer('\:', raw):
                 found.append(i.start(0))
         if len(found) == 2:
-            # print('\nDays-Hours:Minutes:Seconds (D-H:M:S) Format')
-            # print(raw)
-
+            # (D-H:M:S) Format
             temp = re.split('[-]', raw)
             day = int(temp[0]) * 1440  # The amount of minutes in a day
 
@@ -161,8 +159,7 @@ def timeConeversion(raw):
             max_minutes = day + h + m + s
 
         if len(found) == 1:
-            # print('\nDays-Hours:Minutes (D-H:M) Format')
-            # print(raw)
+            # (D-H:M) Format
             temp = re.split('[-]', raw)
             day = int(temp[0]) * 1440  # The amount of minutes in a day
 
@@ -174,8 +171,7 @@ def timeConeversion(raw):
             max_minutes = day + h + m
 
         if re.search('\:', raw) is None:  # Working
-            # print('\nDay-Hour (DH) Format')
-            # print(raw)
+            # Day-Hour (DH) Format
             temp = re.split('[-]', raw)
             day = int(temp[0]) * 1440  # The amount of minutes in a day
             h = int(temp[1]) * 60
@@ -187,8 +183,7 @@ def timeConeversion(raw):
                 found.append(i.start(0))
 
         if len(found) == 2:
-            # print('\nHours:Minutes:Seconds (H:M:S) Format')
-            # print(raw)
+            # (H:M:S) Format
             hms = re.split('[:]', raw)
             h = int(hms[0]) * 60
             m = int(hms[1])
@@ -197,8 +192,7 @@ def timeConeversion(raw):
             max_minutes = h + m + s
 
         if len(found) == 1:
-            # print('\nMinutes:Seconds (M:S) Format')
-            # print(raw)
+            # (M:S) Format
             hms = re.split('[:]', raw)
             m = int(hms[0])
             s = int(hms[1]) * 0.0166667
@@ -206,8 +200,7 @@ def timeConeversion(raw):
             max_minutes = m + s
 
         if re.search('\:', raw) is None:  # Working
-            # print('\nMinute (MM) Format')
-            # print(raw)
+            # (MM) Format
             max_minutes = int(raw)
 
     return max_minutes
@@ -234,7 +227,13 @@ def injection(connection, tableName):
         # Open a new cursor in existing connection.
         cursor = connection.cursor()
 
-        # Read the first line of the file to determine the record format.
+        cursor.execute("SELECT lastReadinFile FROM lastReadin WHERE hpcID='" + tableName + "'")
+        hpcList = cursor.fetchall()
+        tupleBreakdown = []
+        tupleBreakdown += hpcList[0]
+        lastReadinFile = tupleBreakdown[0]
+
+
         readIn = open(filename, 'r')
         firstline = next(readIn)
 
@@ -244,84 +243,90 @@ def injection(connection, tableName):
             total_files_skipped += 1
             print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename)
             continue
+        if lastReadinFile < filename:
+        # Read the first line of the file to determine the record format.
+            # Read the rest of the file line by line.
+            lineno = 1
+            for line in readIn:
+                # Assign line number
+                lineno += 1
 
-        # Read the rest of the file line by line.
-        lineno = 1
-        for line in readIn:
-            # Assign line number
-            lineno += 1
+                # Parse next line and validate number of fields.
+                row = line.split('|')
+                size = len(row)
+                if size != record_size:
+                    total_errors += 1
+                    print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line",
+                          lineno)
+                    continue
 
-            # Parse next line and validate number of fields.
-            row = line.split('|')
-            size = len(row)
-            if size != record_size:
-                total_errors += 1
-                print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line",
-                      lineno)
-                continue
+                # Assign fields from left to right.
+                jobid = str(row[0])
+                user = str(row[1])
+                account = str(row[2])
 
-            # Assign fields from left to right.
-            jobid = str(row[0])
-            user = str(row[1])
-            account = str(row[2])
+                # Generates a pytz.AmbiguousTimeError
 
-            # Generates a pytz.AmbiguousTimeError
+                # Conversion to UTC for start, end and submit variables
+                local_start = datetime.strptime(row[3], '%Y-%m-%dT%H:%M:%S')
+                local_dt_strt = local.localize(local_start, is_dst=True)
+                start = local_dt_strt.astimezone(pytz.utc)
 
-            # Conversion to UTC for start, end and submit variables
-            local_start = datetime.strptime(row[3], '%Y-%m-%dT%H:%M:%S')
-            local_dt_strt = local.localize(local_start, is_dst=True)
-            start = local_dt_strt.astimezone(pytz.utc)
+                local_end = datetime.strptime(row[4], '%Y-%m-%dT%H:%M:%S')
+                local_dt_end = local.localize(local_end, is_dst=True)
+                end = local_dt_end.astimezone(pytz.utc)
 
-            local_end = datetime.strptime(row[4], '%Y-%m-%dT%H:%M:%S')
-            local_dt_end = local.localize(local_end, is_dst=True)
-            end = local_dt_end.astimezone(pytz.utc)
+                local_submit = datetime.strptime(row[5], '%Y-%m-%dT%H:%M:%S')
+                local_dt_submit = local.localize(local_submit, is_dst=True)
+                submit = local_dt_submit.astimezone(pytz.utc)
 
-            local_submit = datetime.strptime(row[5], '%Y-%m-%dT%H:%M:%S')
-            local_dt_submit = local.localize(local_submit, is_dst=True)
-            submit = local_dt_submit.astimezone(pytz.utc)
+                queue = str(row[6])
 
-            queue = str(row[6])
+                raw = str(row[7])  # Raw is the max_minutes column
+                max_minutes = timeConversion(raw)
 
-            raw = str(row[7])  # Raw is the max_minutes column
-            max_minutes = timeConeversion(raw)
+                jobname = str(row[8])
 
-            jobname = str(row[8])
+                state = str(row[9])
 
-            state = str(row[9])
+                nnodes = intTryParse(row[10], filename, lineno)
+                reqcpus = intTryParse(row[11], filename, lineno)
+                nodelist = str(row[12])
 
-            nnodes = intTryParse(row[10], filename, lineno)
-            reqcpus = intTryParse(row[11], filename, lineno)
-            nodelist = str(row[12])
+                # Optional fields depending on record length.
+                qos = None
+                if record_size == QOS_RECORD_LEN:
+                    qos = str(row[13])
 
-            # Optional fields depending on record length.
-            qos = None
-            if record_size == QOS_RECORD_LEN:
-                qos = str(row[13])
+                add_data = ("INSERT IGNORE INTO " + tableName +
+                            "(jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist, qos) "
+                            "VALUES (%(jobid)s, %(user)s, %(account)s, %(start)s, %(end)s, %(submit)s, %(queue)s, %(max_minutes)s, %(jobname)s, %(state)s, %(nnodes)s, %(reqcpus)s, %(nodelist)s, %(qos)s)")
 
-            add_data = ("INSERT IGNORE INTO " + tableName +
-                        "(jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist, qos) "
-                        "VALUES (%(jobid)s, %(user)s, %(account)s, %(start)s, %(end)s, %(submit)s, %(queue)s, %(max_minutes)s, %(jobname)s, %(state)s, %(nnodes)s, %(reqcpus)s, %(nodelist)s, %(qos)s)")
+                data = {
+                    'jobid': jobid,
+                    'user': user,
+                    'account': account,
+                    'start': start,
+                    'end': end,
+                    'submit': submit,
+                    'queue': queue,
+                    'max_minutes': max_minutes,
+                    'jobname': jobname,
+                    'state': state,
+                    'nnodes': nnodes,
+                    'reqcpus': reqcpus,
+                    'nodelist': nodelist,
+                    'qos': qos,
+                }
 
-            data = {
-                'jobid': jobid,
-                'user': user,
-                'account': account,
-                'start': start,
-                'end': end,
-                'submit': submit,
-                'queue': queue,
-                'max_minutes': max_minutes,
-                'jobname': jobname,
-                'state': state,
-                'nnodes': nnodes,
-                'reqcpus': reqcpus,
-                'nodelist': nodelist,
-                'qos': qos,
-            }
 
-            cursor.execute(add_data, data)
-        # Commit after writing all the data of the current file into the table
+                cursor.execute(add_data, data)
+                cursor.execute("UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'") # Update the LRF of row of correct HPCID with correct LRF
+            # Commit after writing all the data of the current file into the table
+        else:
+            continue
         connection.commit()
+
 
         # Print progress message over the last message without newline.
         filecount += 1
