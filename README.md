@@ -21,7 +21,7 @@ JobID|User|Account|Start|End|Submit|Partition|Timelimit|JobName|State|NNodes|Req
 ```
 
 Each of the data points column names is used to create the column names of the table where the data will be store. It therefore can be queried
-to run statistical analysis to see how to best approach dynamically reallocating submmited jobs to the various HPC systems.
+to run statistical analysis to see how to best approach dynamically reallocating submitted jobs to the various HPC systems.
 
 # Instructions on How to Run Script 
 
@@ -50,7 +50,7 @@ my_parent_dir = "/home/ubuntu/jobs_data/"  # the parent directory of the hpc-spe
 
 Here are the runtime parameters predetermined to have a valid runtime environment for our script. 
 The variables to note are ```my_user```, ```my_passwd```, ```my_database```. To set up these variables 
-with their correct values, we need to create these values in our workbench. 
+with their correct values, as they must be changed to your user specifications as they cannot be left as default, as such we need to create these values in our SQL workbench. 
 
 ## Creating the Database
 Open up MySQL Workbench and click the plus sign by the "MySQL Connections". 
@@ -73,10 +73,10 @@ connection instance and select ```Edit Connection```. Here, replace the username
 with the new user you created and save. Make sure to test the connection be sure everything is set up correctly.
 
 Take the username, password, and database names that you previously created, open up ```HPCDataLoad.py``` and replace 
-the preconditioned values previously mentioned above and replace them with your own values. You can also change the path where the job data is 
+the default values previously mentioned above and replace them with your own. You can also change the path where the job data is 
 stored on your local machine by changing the ```my_parent_dir``` to that directory path.
 
-All the preinstalled variable names MUST be changed for this program to connect your database and dataset.
+All the default variable names MUST be changed for this program to connect your database and dataset.
 
 # Running the Script 
 For running ```HPCDataLoad.py``` script, go to your terminal and run the following command:
