@@ -1,4 +1,5 @@
 from __future__ import print_function
+import sys
 from datetime import datetime
 import mysql.connector
 from mysql.connector import errorcode
@@ -42,7 +43,12 @@ QOS_RECORD_LEN = 14
 # ---------------------------------------------------
 
 def connect():
+    '''
+    The connect() function is a function that establishes a connection between the provided SQl user database and Python via the mysql.connector library package
 
+    :return:
+        connection: function variable that holds the connection properties to the provided SQL database to run certain commands in Python as if it were a SQL command
+    '''
     connection = mysql.connector.connect(host=my_host, user=my_user, passwd=my_passwd, database=my_database)
 
     print('\nSuccessfully Connected to your MySQL Database:', my_database)
@@ -50,27 +56,38 @@ def connect():
     return connection
 
 def connectGen():
-    # This function is general connection to the MySQL connection instance to look at the available databases
-    # Is used in createDatabase() function to create a database if it doesn't exist already
+    '''
+    The connectGen() function creates a general connection this python script and MySQL to run SQL commands. This is different than connect() as it is a more general connection,
+    as in connect(), it is a connection that is tied to database and can only run SQL commands in that specific database. connectGen() can run SQL commands in a more general sense that
+    is outside the scope of a specific database
+
+    :return:
+        genConnection: function variable that holds a general cursor-type attribute, which is passed into different functions that need to use a SQL command that can only be processed via
+        the cursor
+    '''
+
     genConnection = mysql.connector.connect(host=my_host, user=my_user, passwd=my_passwd)
 
-    print('\nSuccessfully Connected to MySQL Workbench')
-    cursor = genConnection.cursor()
-
-    #print('\nList of available databases:')
-    #cursor.execute('SHOW DATABASES')
-    #for x in cursor:
-    #    print(x)
+    print('\nSuccessfully Connected to MySQL Server')
 
     return genConnection
 
 def createDatabase(genConnection, databaseName):
+    '''
+    The createDatabase() function, provided with the genConnection and databaseName variables, creates a SQL database based on if it already exists. It will create one if it does not exist, and
+    will use the provided default database if no database is requested
 
-    if databaseName == "": # No user input, as such use the default database name from the above section
-        print('Default database in use...')
+    :param genConnection: function provided variable that holds the SQL-Python connection property, which is used to create a temporary cursor object in this function
+    :param databaseName: function provided object holding the user-defined SQL database name
+    :return: None
+        Returns None but creates a database if requested
+    '''
+    global my_database
+    if databaseName == my_database: # User provided a database name that matches the default, as such the default database name from the global variables is used
+        print('Default database ' + databaseName + ' in use...')
 
     else: # Else, set the my_database variable to the new user inputted one, create if not exists by general cursor
-        global my_database
+
         my_database = databaseName
         genConnection.get_warnings = True
         cursor = genConnection.cursor()
@@ -82,23 +99,36 @@ def createDatabase(genConnection, databaseName):
             cursor.execute("SHOW DATABASES")
             for x in cursor:
                 print(x)
-        elif(tuple[0][1] == 1007):
-            print('\nDatabase already exists')
+        elif(tuple[0][1] == 1007): # Error code 1007 occurs if that database name already exists, as such error is handled
+            print('\nDatabase ' + databaseName + ' already exists')
 
         cursor.close()
 
 def createTable(connection, tableName):
+    '''
+    The createTable() function, provided with connection and tableName variable, creates a SQL table in the provided SQL database. This function will create a table of the requested HPC system
+    if it does not already exist, as well as a lastReadin table, which is a table that stores the date of the last commited read in file to its respective HPC table to reduce overall runtime
+    and increase efficiency.
 
+    :param connection: function provided variable that holds a connection with the SQL instance, utilized by creating a temporary cursor object to run certain SQL commands
+    :param tableName: function provided variable that holds the requested table name
+    :return: None
+
+    '''
     connection.get_warnings = True
     cursor = connection.cursor()
 
+    # Established each column (name, type, length, null status) of the newly created table
     cursor.execute(
-        "CREATE TABLE IF NOT EXISTS " + tableName + " (jobid varchar(30) NOT NULL PRIMARY KEY, user varchar(80) NOT NULL, account varchar(60) NOT NULL, start datetime NOT NULL, end datetime NOT NULL, submit datetime NOT NULL, queue varchar(30) NOT NULL, max_minutes int unsigned NOT NULL, jobname varchar(60) NOT NULL, state varchar(20) NOT NULL, nnodes int unsigned NOT NULL, reqcpus int unsigned NOT NULL, nodelist TEXT NOT NULL, qos varchar(20))")
+        "CREATE TABLE IF NOT EXISTS " + tableName + " (jobid varchar(30) NOT NULL PRIMARY KEY, user varchar(80) NOT NULL, account varchar(60) NOT NULL, "
+                                                    "start datetime NOT NULL, end datetime NOT NULL, submit datetime NOT NULL, queue varchar(30) NOT NULL, "
+                                                    "max_minutes int unsigned NOT NULL, jobname varchar(60) NOT NULL, state varchar(20) NOT NULL, nnodes int unsigned NOT NULL, "
+                                                    "reqcpus int unsigned NOT NULL, nodelist TEXT NOT NULL, qos varchar(20))")
     tuple = cursor.fetchwarnings()  # <- returns a list of tuples
 
     cursor.execute("CREATE TABLE IF NOT EXISTS lastReadin (hpcID varchar(30) NOT NULL UNIQUE, lastReadinFile varchar(30) NOT NULL) ")
     if tuple is None:
-        print('New table generated')
+        print('New table ' + tableName + ' generated')
         # ALl permissions granted, no warning message or message in general outputted to the user, no need for conditional statements
         dbspec = my_database + '.' + tableName
 
@@ -121,10 +151,10 @@ def createTable(connection, tableName):
 
         connection.commit()  # Commits any tables and indices that were created to the database
         print('Indexes created\n')
-    elif (tuple[0][1] == 1050):
-        print('Table already exists\n')
+    elif (tuple[0][1] == 1050): # Error code 1050 occurs if the table already exists, error handeling
+        print('Table ' + tableName + ' already exists\n')
 
-    date = '1999-01-01.txt'
+    date = '1999-01-01.txt' # Date must be a value that is before any of the dates the accounting was run on, as such a arbitary date long in the past was selected - Do not change
 
     add_data = ("INSERT IGNORE INTO lastReadin (hpcID, lastReadinFile) "
                 "VALUES (%(hpcID)s, %(lastReadinFile)s)")
@@ -132,12 +162,21 @@ def createTable(connection, tableName):
         'hpcID': tableName,
         'lastReadinFile': date,
     }
-    cursor.execute(add_data, data, multi=True)
+    cursor.execute(add_data, data, multi=True) # Running command to create lastReadin table and inserting the 'date' variable into it
     connection.commit()
     cursor.close()
 
 def timeConversion(raw):
-    # Takes the "raw" minutes column and converting into a standard format based on raw data column format
+    '''
+    The timeConversion() function takes the unspliced Timelimit column from the provided accounting data and based on the data's different formating, converts the time into a standard format
+    that is returned to the injection() function. In the SQL table, this column is renamed to max_minutes.
+
+    :param raw: function provided object that holds the unspliced Timelimit data that holds the max amount of time a job can run for. This data is in a txt format and as such is convereted into a valid
+    decimal time format, in this case, is converted into minutes. For instance, 2-00:00:00 would be converted into 2880 minutes. There are different formats, and are handeled below
+    :return: max_minutes
+        Object that holds the converted time value for the Timelimit column, which is returned to injection() function
+
+    '''
     dash_position = raw.find('-')
     if (dash_position == 1):
         found = []
@@ -206,8 +245,30 @@ def timeConversion(raw):
     return max_minutes
 
 def injection(connection, tableName):
+    '''
+    The injection() function finds the directory where the requested HPC accounting data is held, and line by line for each file, inserts the accounting data into its respective HPC SQL data table.
+    injection() will not insert data if it previously has been inserted into the table, utilized by the functionality of the lastReadin SQL data table, which checks to see the current filename
+    is newer than the date of the last commited file
+
+    Each accounting data for each submitted job is in the following format the majority of time except for certain cases:
+    JobID|User|Account|Start|End|Submit|Partition|Timelimit|JobName|State|NNodes|ReqCPUS|NodeList|QOS
+    As such, each line is spliced and converted into proper data types
+
+    :param connection: function provided variable that holds a connection with the SQL instance, utilized by creating a temporary cursor object to run certain SQL commands
+    :param tableName: function provided variable that holds the requested table name
+    :return: None
+        None is returned but the accounting data is inserted into the SQL data table
+    '''
     # Assign the actual directory that contains all the input files.
-    source = my_parent_dir + tableName
+
+    dashCheck = my_parent_dir[-1]
+    if dashCheck != '/':
+        adjustment = my_parent_dir + '/' #Adds / to provided accounting data directory path if user didn't specify correctly path
+        source = adjustment + tableName
+    else:
+        source = my_parent_dir + tableName
+
+
 
     os.chdir(source)
 
@@ -230,20 +291,23 @@ def injection(connection, tableName):
         cursor.execute("SELECT lastReadinFile FROM lastReadin WHERE hpcID='" + tableName + "'")
         hpcList = cursor.fetchall()
         tupleBreakdown = []
+        # tupleBreakdown will only access the first value in hpcList because hpcList is a tuple that carries only the last readin filename (which in our specific case is the last date the
+        # data was commited to the HPC data table -> EX. HPCList:  [('2022-10-05.txt',)]
+        # As such, the tuple must be spliced into a text format which is used in the comparison with the filename to see if the currently reviewed filename is newer than the last readin file
         tupleBreakdown += hpcList[0]
         lastReadinFile = tupleBreakdown[0]
 
+        if lastReadinFile < filename: # If the current filename is newer than the last readin file, insert accounting data to table
+            readIn = open(filename, 'r')
+            firstline = next(readIn)
 
-        readIn = open(filename, 'r')
-        firstline = next(readIn)
+            # Establish this file's record size.
+            record_size = len(firstline.split('|'))
+            if record_size != SHORT_RECORD_LEN and record_size != QOS_RECORD_LEN:
+                total_files_skipped += 1
+                print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename) # Error handeling if the feilds in the data are not curretnly supported by table
+                continue
 
-        # Establish this file's record size.
-        record_size = len(firstline.split('|'))
-        if record_size != SHORT_RECORD_LEN and record_size != QOS_RECORD_LEN:
-            total_files_skipped += 1
-            print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename)
-            continue
-        if lastReadinFile < filename:
         # Read the first line of the file to determine the record format.
             # Read the rest of the file line by line.
             lineno = 1
@@ -265,9 +329,7 @@ def injection(connection, tableName):
                 user = str(row[1])
                 account = str(row[2])
 
-                # Generates a pytz.AmbiguousTimeError
-
-                # Conversion to UTC for start, end and submit variables
+                # Conversion to UTC for start, end and submit column variables
                 local_start = datetime.strptime(row[3], '%Y-%m-%dT%H:%M:%S')
                 local_dt_strt = local.localize(local_start, is_dst=True)
                 start = local_dt_strt.astimezone(pytz.utc)
@@ -321,12 +383,14 @@ def injection(connection, tableName):
 
 
                 cursor.execute(add_data, data)
-                cursor.execute("UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'") # Update the LRF of row of correct HPCID with correct LRF
             # Commit after writing all the data of the current file into the table
-        elif lastReadinFile == filename:
-            continue
-        connection.commit()
+            connection.commit()
+            cursor.execute("UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'") # Update the LRF of row of correct HPCID with correct LRF
 
+
+        elif lastReadinFile >= filename: # This means for loop has gotten to most recent file that has been inserted
+            # As such, skip insert
+            continue
 
         # Print progress message over the last message without newline.
         filecount += 1
@@ -341,6 +405,13 @@ def injection(connection, tableName):
     print('\nEnd: ', end)
 
 def intTryParse(value, filename, lineno):
+    '''
+    The intTryParse() function documents any attempted files that have an issue (Different amount of variables in the data, etc.)
+    :param value:
+    :param filename: function provided object that holds the currently read filename in the injection() function
+    :param lineno: function provided value that holds the current line that is being read in for each respective file name
+    :return: None
+    '''
     try:
         return int(value)
     except:
@@ -351,12 +422,24 @@ def intTryParse(value, filename, lineno):
 
 def main():
 
-    genConnection = connectGen() # Generally connect to MySQL Workbench
-    databaseName = input('\nEnter the name of the MySQL database you would like to create your data tables in. If no name is inputted, the default database value will be used: ')
-    createDatabase(genConnection, databaseName) # Checks to see if the inputted database name is equal to the default name or not, if not, create new database to access and create tables in
+    genConnection = connectGen()
+
+    while len(sys.argv) != 3:
+        try:
+
+            print("Please enter the correct amount of command-line arguments (2) in their respective order: "
+                      "\npython3 HPCDataLoad.py [Database Name] [Table Name]")
+            sys.exit(1)
+        except ValueError:
+                print("Incorrect number of arguments submitted, please make sure to enter the correct amount of command-line arguments (2) in their respective order: "
+                      "\npython3 HPCDataLoad.py [Database Name] [Table Name]")
+
+    databaseName = sys.argv[1]
+    tableName = sys.argv[2]
+    createDatabase(genConnection,
+                   databaseName)  # Checks to see if the inputted database name is equal to the default name or not, if not, create new database to access and create tables in
 
     connection = connect()
-    tableName = input('Enter a name of a HPC machine you would like to store your job data into: ')
     createTable(connection, tableName)
     injection(connection, tableName)
 
@@ -365,7 +448,6 @@ def main():
     print("Total files read: ", filecount)
 
     connection.close()
-
-
+    sys.exit(1)
 if __name__ == '__main__':
     main()
