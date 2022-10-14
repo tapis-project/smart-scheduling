@@ -108,11 +108,11 @@ Total files read:  0
 ```
 
 In the dataset, there are 6 HPC systems to choose from: Frontera, Stampede2, Stampede, Lonestar6, Longhorn, and Maverick. 
-You may test any of these systems or any system following the TACC CRON job format. This script will insert the job accounting 
+You may test any of these systems or any system that follow the TACC CRON job format. This script will insert the job accounting 
 to the SQL table, tracking the total run time and record errors that occured. 
 
 The script will either create the data table if it does not already exist and insert the data pertaining to each HPC
-system. In addition, to increase efficiency, a last read in file system is incorporated, which will
-only insert new job data if the data that is currently be read in is newer than the last data that was successfully committed to the table.
+system into its respective table. In addition, to increase efficiency, a last read in file system is incorporated, which will
+only allow the program to insert new job data if the data that is currently be read in is newer than the last data that was successfully committed to the table.
 
 For any questions, feel free to message the admins of this Github repository: Costaki33 and richcar58.  
