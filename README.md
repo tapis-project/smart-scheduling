@@ -49,6 +49,7 @@ my_user = "root"  # Connection instance username that has the ability to create 
 my_passwd = "password"  # Password for the user with the access mentioned on the line above
 my_database = "HPC_Job_Time_Data"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
 my_parent_dir = "/home/ubuntu/jobs_data/"  # The parent directory of the HPC-specific input directories that host the submitted job data that will be inserted into the MySQL table
+partition_limit = 2880 # Default time limit for max job runtimes in TACC HPC systems - 2880 Minutes or 2 Days
 # **************************************************************
 
 ```
@@ -56,6 +57,7 @@ my_parent_dir = "/home/ubuntu/jobs_data/"  # The parent directory of the HPC-spe
 Here are the runtime parameters predetermined to have a valid runtime environment for our script. 
 The variables to note are ```my_user```, ```my_passwd```, ```my_database```. To set up these variables 
 with their correct values, as they must be changed to your user specifications as they cannot be left as default, as such we need to create these values in our SQL workbench. 
+In addition, based on your partition limit setting for your max job runtime, set ```partition_limit``` accordingly. 
 
 ## Creating the Database
 Open up MySQL Workbench and click the plus sign by the "MySQL Connections". 
