@@ -4,6 +4,7 @@ from datetime import datetime
 import mysql.connector
 from mysql.connector import errorcode
 import os
+from os.path import exists
 import re
 import pytz
 import logging
@@ -29,6 +30,7 @@ my_user = "root"  # Connection instance username that has the ability to create 
 my_passwd = "password"  # Password for the user with the access mentioned on the line above
 my_database = "HPC_Job_Time_Data"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
 my_parent_dir = "/home/ubuntu/jobs_data/"  # The parent directory of the HPC-specific input directories that host the submitted job data that will be inserted into the MySQL table
+partition_limit = 2880 # Default time limit for max job runtimes in TACC HPC systems - 2880 Minutes or 2 Days
 # **************************************************************
 
 # ---------------------------------------------------
@@ -240,7 +242,10 @@ def timeConversion(raw):
 
         if re.search('\:', raw) is None:  # Working
             # (MM) Format
-            max_minutes = int(raw)
+            if raw == 'Partition_Limit':
+               max_minutes = partition_limit
+            else:
+                max_minutes = int(raw)
 
     return max_minutes
 
@@ -267,8 +272,6 @@ def injection(connection, tableName):
         source = adjustment + tableName
     else:
         source = my_parent_dir + tableName
-
-
 
     os.chdir(source)
 
@@ -297,95 +300,104 @@ def injection(connection, tableName):
         tupleBreakdown += hpcList[0]
         lastReadinFile = tupleBreakdown[0]
 
-        if lastReadinFile < filename: # If the current filename is newer than the last readin file, insert accounting data to table
-            readIn = open(filename, 'r')
-            firstline = next(readIn)
 
-            # Establish this file's record size.
-            record_size = len(firstline.split('|'))
-            if record_size != SHORT_RECORD_LEN and record_size != QOS_RECORD_LEN:
+        if lastReadinFile < filename: # If the current filename is newer than the last readin file, insert accounting data to table
+
+            fileSize = os.path.getsize(filename)
+            fileExists = exists(source + '/' + filename)
+            if fileSize == 0 or fileExists == False:
                 total_files_skipped += 1
-                print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename) # Error handeling if the feilds in the data are not curretnly supported by table
+                print("\nERROR: File: ", filename, " is empty, skipping file") # Error handeling - empty or non existant files
                 continue
 
-        # Read the first line of the file to determine the record format.
-            # Read the rest of the file line by line.
-            lineno = 1
-            for line in readIn:
-                # Assign line number
-                lineno += 1
-
-                # Parse next line and validate number of fields.
-                row = line.split('|')
-                size = len(row)
-                if size != record_size:
-                    total_errors += 1
-                    print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line",
-                          lineno)
+            else:
+                readIn = open(filename, 'r')
+                firstline = next(readIn)
+                # Establish this file's record size.
+                record_size = len(firstline.split('|'))
+                if record_size != SHORT_RECORD_LEN and record_size != QOS_RECORD_LEN:
+                    total_files_skipped += 1
+                    print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename) # Error handeling if the feilds in the data are not curretnly supported by table
                     continue
 
-                # Assign fields from left to right.
-                jobid = str(row[0])
-                user = str(row[1])
-                account = str(row[2])
+            # Read the first line of the file to determine the record format.
+                # Read the rest of the file line by line.
+                lineno = 1
+                for line in readIn:
+                    # Assign line number
+                    lineno += 1
 
-                # Conversion to UTC for start, end and submit column variables
-                local_start = datetime.strptime(row[3], '%Y-%m-%dT%H:%M:%S')
-                local_dt_strt = local.localize(local_start, is_dst=True)
-                start = local_dt_strt.astimezone(pytz.utc)
+                    # Parse next line and validate number of fields.
+                    row = line.split('|')
+                    size = len(row)
+                    if size != record_size:
+                        total_errors += 1
+                        print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line",
+                              lineno)
+                        continue
 
-                local_end = datetime.strptime(row[4], '%Y-%m-%dT%H:%M:%S')
-                local_dt_end = local.localize(local_end, is_dst=True)
-                end = local_dt_end.astimezone(pytz.utc)
+                    # Assign fields from left to right.
+                    jobid = str(row[0])
+                    user = str(row[1])
+                    account = str(row[2])
 
-                local_submit = datetime.strptime(row[5], '%Y-%m-%dT%H:%M:%S')
-                local_dt_submit = local.localize(local_submit, is_dst=True)
-                submit = local_dt_submit.astimezone(pytz.utc)
+                    # Conversion to UTC for start, end and submit column variables
+                    local_start = datetime.strptime(row[3], '%Y-%m-%dT%H:%M:%S')
+                    local_dt_strt = local.localize(local_start, is_dst=True)
+                    start = local_dt_strt.astimezone(pytz.utc)
 
-                queue = str(row[6])
+                    local_end = datetime.strptime(row[4], '%Y-%m-%dT%H:%M:%S')
+                    local_dt_end = local.localize(local_end, is_dst=True)
+                    end = local_dt_end.astimezone(pytz.utc)
 
-                raw = str(row[7])  # Raw is the max_minutes column
-                max_minutes = timeConversion(raw)
+                    local_submit = datetime.strptime(row[5], '%Y-%m-%dT%H:%M:%S')
+                    local_dt_submit = local.localize(local_submit, is_dst=True)
+                    submit = local_dt_submit.astimezone(pytz.utc)
 
-                jobname = str(row[8])
+                    queue = str(row[6])
 
-                state = str(row[9])
+                    raw = str(row[7])  # Raw is the max_minutes column
+                    max_minutes = timeConversion(raw)
 
-                nnodes = intTryParse(row[10], filename, lineno)
-                reqcpus = intTryParse(row[11], filename, lineno)
-                nodelist = str(row[12])
+                    jobname = str(row[8])
 
-                # Optional fields depending on record length.
-                qos = None
-                if record_size == QOS_RECORD_LEN:
-                    qos = str(row[13])
+                    state = str(row[9])
 
-                add_data = ("INSERT IGNORE INTO " + tableName +
-                            "(jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist, qos) "
-                            "VALUES (%(jobid)s, %(user)s, %(account)s, %(start)s, %(end)s, %(submit)s, %(queue)s, %(max_minutes)s, %(jobname)s, %(state)s, %(nnodes)s, %(reqcpus)s, %(nodelist)s, %(qos)s)")
+                    nnodes = intTryParse(row[10], filename, lineno)
+                    reqcpus = intTryParse(row[11], filename, lineno)
+                    nodelist = str(row[12])
 
-                data = {
-                    'jobid': jobid,
-                    'user': user,
-                    'account': account,
-                    'start': start,
-                    'end': end,
-                    'submit': submit,
-                    'queue': queue,
-                    'max_minutes': max_minutes,
-                    'jobname': jobname,
-                    'state': state,
-                    'nnodes': nnodes,
-                    'reqcpus': reqcpus,
-                    'nodelist': nodelist,
-                    'qos': qos,
-                }
+                    # Optional fields depending on record length.
+                    qos = None
+                    if record_size == QOS_RECORD_LEN:
+                        qos = str(row[13])
+
+                    add_data = ("INSERT IGNORE INTO " + tableName +
+                                "(jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist, qos) "
+                                "VALUES (%(jobid)s, %(user)s, %(account)s, %(start)s, %(end)s, %(submit)s, %(queue)s, %(max_minutes)s, %(jobname)s, %(state)s, %(nnodes)s, %(reqcpus)s, %(nodelist)s, %(qos)s)")
+
+                    data = {
+                        'jobid': jobid,
+                        'user': user,
+                        'account': account,
+                        'start': start,
+                        'end': end,
+                        'submit': submit,
+                        'queue': queue,
+                        'max_minutes': max_minutes,
+                        'jobname': jobname,
+                        'state': state,
+                        'nnodes': nnodes,
+                        'reqcpus': reqcpus,
+                        'nodelist': nodelist,
+                        'qos': qos,
+                    }
 
 
-                cursor.execute(add_data, data)
-            # Commit after writing all the data of the current file into the table
-            connection.commit()
-            cursor.execute("UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'") # Update the LRF of row of correct HPCID with correct LRF
+                    cursor.execute(add_data, data)
+                # Commit after writing all the data of the current file into the table
+                connection.commit()
+                cursor.execute("UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'") # Update the LRF of row of correct HPCID with correct LRF
 
 
         elif lastReadinFile >= filename: # This means for loop has gotten to most recent file that has been inserted
