@@ -59,6 +59,19 @@ The variables to note are ```my_user```, ```my_passwd```, ```my_database```. To 
 with their correct values, as they must be changed to your user specifications as they cannot be left as default, as such we need to create these values in our SQL workbench. 
 In addition, based on your partition limit setting for your max job runtime, set ```partition_limit``` accordingly. 
 
+## TACC HPC Accouting Data Setup
+To get the most recent accounting data points for each HPC system, you need access to Stampede2 and Frontera from TACC. You can do so at the following [link](https://portal.tacc.utexas.edu/)
+Within your ```my_parent_dir``` directory, make subdirectories named after the TACC HPCs or whatever HPC your gathering your accounting data from.
+Run the following scp commands:
+
+```commandline
+scp -r yourUser@stampede2.tacc.utexas.edu:/corral/tacc/hpc/tacc_stats_site/maverick/accounting* /my/filepath/my_parent_dir/maverick/
+scp -r yourUser@stampede2.tacc.utexas.edu:/corral/tacc/hpc/tacc_stats_site/stampede/accounting* /my/filepath/my_parent_dir/stampede/
+scp -r yourUser@stampede2.tacc.utexas.edu:/corral/tacc/hpc/tacc_stats_site/stampede2/accounting* /my/filepath/my_parent_dir/stampede2/
+scp -r yourUser@stampede2.tacc.utexas.edu:/corral/tacc/hpc/tacc_stats_site/ls6/accounting* /my/filepath/my_parent_dir/lonestar6/
+scp -r yourUser@frontera.tacc.utexas.edu:/scratch1/projects/tacc/tacc_stats/frontera/accounting/* /my/filepath/my_parent_dir/frontera/
+```
+
 ## Creating the Database
 Open up MySQL Workbench and click the plus sign by the "MySQL Connections". 
 
