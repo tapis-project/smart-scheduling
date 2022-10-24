@@ -67,7 +67,7 @@ Run the following scp commands:
 ```commandline
 scp -r yourUser@stampede2.tacc.utexas.edu:/corral/tacc/hpc/tacc_stats_site/maverick/accounting* /my/filepath/my_parent_dir/maverick/
 scp -r yourUser@stampede2.tacc.utexas.edu:/corral/tacc/hpc/tacc_stats_site/stampede/accounting* /my/filepath/my_parent_dir/stampede/
-scp -r yourUser@stampede2.tacc.utexas.edu:/corral/tacc/hpc/tacc_stats_site/stampede2/accounting* /my/filepath/my_parent_dir/stampede2/
+scp -r yourUser@stampede2.tacc.utexas.edu:/scratch/projects/tacc_stats/stampede2/accounting* /my/filepath/my_parent_dir/stampede2/
 scp -r yourUser@stampede2.tacc.utexas.edu:/corral/tacc/hpc/tacc_stats_site/ls6/accounting* /my/filepath/my_parent_dir/lonestar6/
 scp -r yourUser@frontera.tacc.utexas.edu:/scratch1/projects/tacc/tacc_stats/frontera/accounting/* /my/filepath/my_parent_dir/frontera/
 ```
