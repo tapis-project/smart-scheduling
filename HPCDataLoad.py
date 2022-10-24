@@ -242,7 +242,9 @@ def timeConversion(raw):
 
         if re.search('\:', raw) is None:  # Working
             # (MM) Format
-            if raw == 'Partition_Limit':
+            case1 = 'Partition_Limit' # Check to see if raw is not in the typical time-format and as such passing in global variable partition_limit
+            case2 = 'Partition Limit' # if matches test cases
+            if raw.casefold() == case1.casefold() or raw.casefold() == case2.casefold():
                max_minutes = partition_limit
             else:
                 max_minutes = int(raw)
@@ -293,21 +295,28 @@ def injection(connection, tableName):
 
         cursor.execute("SELECT lastReadinFile FROM lastReadin WHERE hpcID='" + tableName + "'")
         hpcList = cursor.fetchall()
-        tupleBreakdown = []
-        # tupleBreakdown will only access the first value in hpcList because hpcList is a tuple that carries only the last readin filename (which in our specific case is the last date the
-        # data was commited to the HPC data table -> EX. HPCList:  [('2022-10-05.txt',)]
-        # As such, the tuple must be spliced into a text format which is used in the comparison with the filename to see if the currently reviewed filename is newer than the last readin file
-        tupleBreakdown += hpcList[0]
-        lastReadinFile = tupleBreakdown[0]
+        tupleBreakdown = [] # tupleBreakdown will only access the first value in hpcList because hpcList is a tuple that carries only the last readin filename (which in our specific case is the last date the
+        tupleBreakdown += hpcList[0] # data was commited to the HPC data table -> EX. HPCList:  [('2022-10-05.txt',)]
+        lastReadinFile = tupleBreakdown[0] # As such, the tuple must be spliced into a text format which is used in the comparison with the filename to see if the currently reviewed filename is newer than the last readin file
 
-
-        if lastReadinFile < filename: # If the current filename is newer than the last readin file, insert accounting data to table
+        if lastReadinFile >= filename: # This means for loop has gotten to most recent file that has been inserted
+            # As such, skip insert
+            continue
+        else: # If the current filename is newer than the last readin file, insert accounting data to table
 
             fileSize = os.path.getsize(filename)
             fileExists = exists(source + '/' + filename)
-            if fileSize == 0 or fileExists == False:
+            permissionCode = oct(os.stat(filename).st_mode & 0o777)[2:] # Returns the permission code (P.C) of filename (P.C being what degree of read access is available for a specific file)
+            readAccess = os.access(filename, os.R_OK) # Returns bool value of whether a file has read access
+
+            if fileSize == 0 or fileExists is False:
                 total_files_skipped += 1
-                print("\nERROR: File: ", filename, " is empty, skipping file") # Error handeling - empty or non existant files
+                print("\nERROR: File: ", filename, " is empty, skipping file") # Error handling - empty/non existant files
+                continue
+
+            elif readAccess is False:
+                total_files_skipped += 1
+                print("\nERROR: File: ", filename, " is inaccessible, cannot be read due to chmod permission code ", permissionCode, ", skipping file")  # Error handling - lacking read permission access to file
                 continue
 
             else:
@@ -317,7 +326,7 @@ def injection(connection, tableName):
                 record_size = len(firstline.split('|'))
                 if record_size != SHORT_RECORD_LEN and record_size != QOS_RECORD_LEN:
                     total_files_skipped += 1
-                    print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename) # Error handeling if the feilds in the data are not curretnly supported by table
+                    print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename) # Error handling if the feilds in the data are not curretnly supported by table
                     continue
 
             # Read the first line of the file to determine the record format.
@@ -396,13 +405,8 @@ def injection(connection, tableName):
 
                     cursor.execute(add_data, data)
                 # Commit after writing all the data of the current file into the table
-                connection.commit()
                 cursor.execute("UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'") # Update the LRF of row of correct HPCID with correct LRF
-
-
-        elif lastReadinFile >= filename: # This means for loop has gotten to most recent file that has been inserted
-            # As such, skip insert
-            continue
+                connection.commit()
 
         # Print progress message over the last message without newline.
         filecount += 1
