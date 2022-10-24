@@ -101,17 +101,11 @@ All the default variable names MUST be changed for this program to connect your 
 # Running the Script 
 For running ```HPCDataLoad.py``` script, go to your terminal and run the following command:
 ```commandline
- $ python3 HPCDataLoad.py [Database Name] [HPC name]
-```
-Where the [Database Name] is the name of database you would like to access and [HPC name] is the name
-of the HPC you would like to insert your data from. You must submit both arguments or an exit code will be prompted:
-```commandline
-Please enter the correct amount of command-line arguments (2) in their respective order:
-python3 HPCDataLoad.py [Database Name] [Table Name]
+ $ python3 HPCDataLoad.py [HPC name]
 ```
 For our example, let run the following, which will produce the following output:
 ```commandline
- $ python3 HPCDataLoad.py HPC_Job_Time_Data frontera
+ $ python3 HPCDataLoad.py frontera
  
 Successfully Connected to MySQL Server
 Default database HPC_Job_Time_Data in use...

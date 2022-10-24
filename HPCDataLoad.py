@@ -437,21 +437,22 @@ def intTryParse(value, filename, lineno):
         return 0
 
 def main():
+    global my_database
 
     genConnection = connectGen()
 
-    while len(sys.argv) != 3:
+    while len(sys.argv) != 2:
         try:
 
             print("Please enter the correct amount of command-line arguments (2) in their respective order: "
-                      "\npython3 HPCDataLoad.py [Database Name] [Table Name]")
+                      "\npython3 HPCDataLoad.py [Table Name]")
             sys.exit(1)
         except ValueError:
                 print("Incorrect number of arguments submitted, please make sure to enter the correct amount of command-line arguments (2) in their respective order: "
-                      "\npython3 HPCDataLoad.py [Database Name] [Table Name]")
+                      "\npython3 HPCDataLoad.py [Table Name]")
 
-    databaseName = sys.argv[1]
-    tableName = sys.argv[2]
+    databaseName = my_database
+    tableName = sys.argv[1]
     createDatabase(genConnection,
                    databaseName)  # Checks to see if the inputted database name is equal to the default name or not, if not, create new database to access and create tables in
 
