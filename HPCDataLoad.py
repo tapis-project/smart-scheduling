@@ -269,8 +269,8 @@ def injection(connection, tableName):
     # Assign the actual directory that contains all the input files.
 
     dashCheck = my_parent_dir[-1]
-    if dashCheck != '/':
-        adjustment = my_parent_dir + '/' #Adds / to provided accounting data directory path if user didn't specify correctly path
+    if dashCheck != "/":
+        adjustment = my_parent_dir + "/" #Adds / to provided accounting data directory path if user didn't specify correctly path
         source = adjustment + tableName
     else:
         source = my_parent_dir + tableName
@@ -285,7 +285,6 @@ def injection(connection, tableName):
     start = datetime.now()
     print('Start: ', start)
     for filename in sorted(os.listdir(source)):
-
         # Skip directories.
         if not os.path.isfile(filename):
             continue
@@ -302,111 +301,113 @@ def injection(connection, tableName):
         if lastReadinFile >= filename: # This means for loop has gotten to most recent file that has been inserted
             # As such, skip insert
             continue
-        else: # If the current filename is newer than the last readin file, insert accounting data to table
+        # If the current filename is newer than the last readin file, insert accounting data to table
 
-            fileSize = os.path.getsize(filename)
-            fileExists = exists(source + '/' + filename)
-            permissionCode = oct(os.stat(filename).st_mode & 0o777)[2:] # Returns the permission code (P.C) of filename (P.C being what degree of read access is available for a specific file)
-            readAccess = os.access(filename, os.R_OK) # Returns bool value of whether a file has read access
+        fileSize = os.path.getsize(filename)
+        fileExists = exists(source + '/' + filename)
+        permissionCode = oct(os.stat(filename).st_mode & 0o777)[2:] # Returns the permission code (P.C) of filename (P.C being what degree of read access is available for a specific file)
+        readAccess = os.access(filename, os.R_OK) # Returns bool value of whether a file has read access
 
-            if fileSize == 0 or fileExists is False:
-                total_files_skipped += 1
-                print("\nERROR: File: ", filename, " is empty, skipping file") # Error handling - empty/non existant files
-                continue
+        if fileSize == 0 or fileExists is False:
+            total_files_skipped += 1
+            print("\nERROR: File: ", filename, " is empty, skipping file") # Error handling - empty/non existant files
+            continue
 
-            elif readAccess is False:
-                total_files_skipped += 1
-                print("\nERROR: File: ", filename, " is inaccessible, cannot be read due to chmod permission code ", permissionCode, ", skipping file")  # Error handling - lacking read permission access to file
-                continue
+        elif readAccess is False:
+            total_files_skipped += 1
+            print("\nERROR: File: ", filename, " is inaccessible, cannot be read due to chmod permission code ", permissionCode, ", skipping file")  # Error handling - lacking read permission access to file
+            continue
+        readIn = open(filename, 'r')
+        firstline = next(readIn)
+        # Establish this file's record size.
+        record_size = len(firstline.split('|'))
+        if record_size != SHORT_RECORD_LEN and record_size != QOS_RECORD_LEN:
+            total_files_skipped += 1
+            print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename) # Error handling if the feilds in the data are not curretnly supported by table
+            continue
+    # Read the first line of the file to determine the record format.
+        # Read the rest of the file line by line.
+        lineno = 1
+        try:
+            for line in readIn:
+                # Assign line number
+                lineno += 1
 
-            else:
-                readIn = open(filename, 'r')
-                firstline = next(readIn)
-                # Establish this file's record size.
-                record_size = len(firstline.split('|'))
-                if record_size != SHORT_RECORD_LEN and record_size != QOS_RECORD_LEN:
-                    total_files_skipped += 1
-                    print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename) # Error handling if the feilds in the data are not curretnly supported by table
+                # Parse next line and validate number of fields.
+                row = line.split('|')
+                size = len(row)
+                if size != record_size:
+                    total_errors += 1
+                    print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line",
+                          lineno)
                     continue
 
-            # Read the first line of the file to determine the record format.
-                # Read the rest of the file line by line.
-                lineno = 1
-                for line in readIn:
-                    # Assign line number
-                    lineno += 1
+                # Assign fields from left to right.
+                jobid = str(row[0])
+                user = str(row[1])
+                account = str(row[2])
 
-                    # Parse next line and validate number of fields.
-                    row = line.split('|')
-                    size = len(row)
-                    if size != record_size:
-                        total_errors += 1
-                        print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line",
-                              lineno)
-                        continue
+                # Conversion to UTC for start, end and submit column variables
+                local_start = datetime.strptime(row[3], '%Y-%m-%dT%H:%M:%S')
+                local_dt_strt = local.localize(local_start, is_dst=True)
+                start = local_dt_strt.astimezone(pytz.utc)
 
-                    # Assign fields from left to right.
-                    jobid = str(row[0])
-                    user = str(row[1])
-                    account = str(row[2])
+                local_end = datetime.strptime(row[4], '%Y-%m-%dT%H:%M:%S')
+                local_dt_end = local.localize(local_end, is_dst=True)
+                end = local_dt_end.astimezone(pytz.utc)
 
-                    # Conversion to UTC for start, end and submit column variables
-                    local_start = datetime.strptime(row[3], '%Y-%m-%dT%H:%M:%S')
-                    local_dt_strt = local.localize(local_start, is_dst=True)
-                    start = local_dt_strt.astimezone(pytz.utc)
+                local_submit = datetime.strptime(row[5], '%Y-%m-%dT%H:%M:%S')
+                local_dt_submit = local.localize(local_submit, is_dst=True)
+                submit = local_dt_submit.astimezone(pytz.utc)
 
-                    local_end = datetime.strptime(row[4], '%Y-%m-%dT%H:%M:%S')
-                    local_dt_end = local.localize(local_end, is_dst=True)
-                    end = local_dt_end.astimezone(pytz.utc)
+                queue = str(row[6])
 
-                    local_submit = datetime.strptime(row[5], '%Y-%m-%dT%H:%M:%S')
-                    local_dt_submit = local.localize(local_submit, is_dst=True)
-                    submit = local_dt_submit.astimezone(pytz.utc)
+                raw = str(row[7])  # Raw is the max_minutes column
+                max_minutes = timeConversion(raw)
 
-                    queue = str(row[6])
+                jobname = str(row[8])
 
-                    raw = str(row[7])  # Raw is the max_minutes column
-                    max_minutes = timeConversion(raw)
+                state = str(row[9])
 
-                    jobname = str(row[8])
+                nnodes = intTryParse(row[10], filename, lineno)
+                reqcpus = intTryParse(row[11], filename, lineno)
+                nodelist = str(row[12])
 
-                    state = str(row[9])
+                # Optional fields depending on record length.
+                qos = None
+                if record_size == QOS_RECORD_LEN:
+                    qos = str(row[13])
 
-                    nnodes = intTryParse(row[10], filename, lineno)
-                    reqcpus = intTryParse(row[11], filename, lineno)
-                    nodelist = str(row[12])
+                add_data = ("INSERT IGNORE INTO " + tableName +
+                            "(jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist, qos) "
+                            "VALUES (%(jobid)s, %(user)s, %(account)s, %(start)s, %(end)s, %(submit)s, %(queue)s, %(max_minutes)s, %(jobname)s, %(state)s, %(nnodes)s, %(reqcpus)s, %(nodelist)s, %(qos)s)")
 
-                    # Optional fields depending on record length.
-                    qos = None
-                    if record_size == QOS_RECORD_LEN:
-                        qos = str(row[13])
-
-                    add_data = ("INSERT IGNORE INTO " + tableName +
-                                "(jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist, qos) "
-                                "VALUES (%(jobid)s, %(user)s, %(account)s, %(start)s, %(end)s, %(submit)s, %(queue)s, %(max_minutes)s, %(jobname)s, %(state)s, %(nnodes)s, %(reqcpus)s, %(nodelist)s, %(qos)s)")
-
-                    data = {
-                        'jobid': jobid,
-                        'user': user,
-                        'account': account,
-                        'start': start,
-                        'end': end,
-                        'submit': submit,
-                        'queue': queue,
-                        'max_minutes': max_minutes,
-                        'jobname': jobname,
-                        'state': state,
-                        'nnodes': nnodes,
-                        'reqcpus': reqcpus,
-                        'nodelist': nodelist,
-                        'qos': qos,
-                    }
+                data = {
+                    'jobid': jobid,
+                    'user': user,
+                    'account': account,
+                    'start': start,
+                    'end': end,
+                    'submit': submit,
+                    'queue': queue,
+                    'max_minutes': max_minutes,
+                    'jobname': jobname,
+                    'state': state,
+                    'nnodes': nnodes,
+                    'reqcpus': reqcpus,
+                    'nodelist': nodelist,
+                    'qos': qos,
+                }
 
 
-                    cursor.execute(add_data, data)
-                # Commit after writing all the data of the current file into the table
-                cursor.execute("UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'") # Update the LRF of row of correct HPCID with correct LRF
-                connection.commit()
+                cursor.execute(add_data, data)
+            # Commit after writing all the data of the current file into the table
+            cursor.execute("UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'") # Update the LRF of row of correct HPCID with correct LRF
+            connection.commit()
+        except ValueError:
+            print("\n VALUE ERROR: Program exited due to a error of one the datapoints on line #", lineno,
+                  "in file", filename, "\n Line:", line)
+            sys.exit(1)
 
         # Print progress message over the last message without newline.
         filecount += 1
