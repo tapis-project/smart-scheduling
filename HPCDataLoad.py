@@ -326,13 +326,13 @@ def injection(connection, tableName):
         if fileSize == 0 or fileExists is False:
             total_files_skipped += 1
             print("\nERROR: File ", filename, " is empty, skipping file")  # Error handling - empty/non existant files
-            errorWrite(errorStatement="ERROR: File {} is empty, skipping file\n".format(filename))
+            writeError(errorStatement="ERROR: File {} is empty, skipping file\n".format(filename))
             continue
 
         elif readAccess is False:
             total_files_skipped += 1
             print("\nERROR: File: ", filename, " is inaccessible, cannot be read due to chmod permission code ", permissionCode, ", skipping file")  # Error handling - lacking read permission access to file
-            errorWrite(errorStatement="ERROR: File {} is inaccessible, cannot be read due to chmod permission code {}, skipping file\n".format(filename, permissionCode))
+            writeError(errorStatement="ERROR: File {} is inaccessible, cannot be read due to chmod permission code {}, skipping file\n".format(filename, permissionCode))
             continue
         readIn = open(filename, 'r')
         firstline = next(readIn)
@@ -342,7 +342,7 @@ def injection(connection, tableName):
             total_files_skipped += 1
             print("\nERROR: Records with", record_size, "fields are not supported, skipping file",
                   filename)  # Error handling if the fields in the data are not currently supported by table
-            errorWrite(errorStatement="ERROR: Records with {} fields are not supported, skipping file {}\n".format(record_size, filename))
+            writeError(errorStatement="ERROR: Records with {} fields are not supported, skipping file {}\n".format(record_size, filename))
             continue
         # Read the first line of the file to determine the record format.
         # Read the rest of the file line by line.
@@ -358,7 +358,7 @@ def injection(connection, tableName):
                 if size != record_size:
                     total_errors += 1
                     print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line", lineno)
-                    errorWrite(errorStatement="ERROR: Record has {} fields, expected {} fields in {} line {}\n{}\n".format(size, record_size, filename, lineno, line))
+                    writeError(errorStatement="ERROR: Record has {} fields, expected {} fields in {} line {}\n{}\n".format(size, record_size, filename, lineno, line))
                     continue
 
                 # Assign fields from left to right.
@@ -456,11 +456,11 @@ def intTryParse(value, filename, lineno, line):
         global total_errors
         total_errors += 1
         print("\nERROR: Integer conversion in file ", filename, "line", lineno)
-        errorWrite(errorStatement="ERROR: Integer conversion in file {} on line {}\n{}\n".format(filename, lineno, line))
+        writeError(errorStatement="ERROR: Integer conversion in file {} on line {}\n{}\n".format(filename, lineno, line))
         return 0
-def errorWrite(errorStatement):
+def writeError(errorStatement):
     '''
-    The errorWrite() function writes any errors that were outputted while inserting the accouting data to "errorlog.txt", a file stored on the directory of the HPC being readin
+    The writeError() function writes all non-fatal errors that were outputted while inserting the accouting data to "errorlog.txt", a file stored on the directory of the HPC being readin
     :param errorStatement: function provided string object that holds the error statement that was printed
     :return: None
     Returns none but creates and appends "errorlog.txt" with each error statement printed due to any addressed issue
