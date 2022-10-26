@@ -426,7 +426,6 @@ def injection(connection, tableName):
         except ValueError:
             print("\nVALUE ERROR: Program exited due to a error of one the datapoints on line ", lineno,
                   "in file", filename, "\n", line)
-            errorWrite(errorStatement="VALUE ERROR: Program exited due to a error of one the datapoints on line {} in file {}\n{}\n".format(lineno, filename, line))
             sys.exit(1)
 
         # Print progress message over the last message without newline.
