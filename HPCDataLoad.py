@@ -30,7 +30,7 @@ my_user = "root"  # Connection instance username that has the ability to create 
 my_passwd = "password"  # Password for the user with the access mentioned on the line above
 my_database = "HPC_Job_Time_Data"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
 my_parent_dir = "/home/ubuntu/jobs_data/"  # The parent directory of the HPC-specific input directories that host the submitted job data that will be inserted into the MySQL table
-partition_limit = 2880 # Default time limit for max job runtimes in TACC HPC systems - 2880 Minutes or 2 Days
+partition_limit = 2880  # Default time limit for max job runtimes in TACC HPC systems - 2880 Minutes or 2 Days
 # **************************************************************
 
 # ---------------------------------------------------
@@ -42,6 +42,8 @@ filecount = 0
 # Number of pipe-separated fields in raw input files
 SHORT_RECORD_LEN = 13
 QOS_RECORD_LEN = 14
+
+
 # ---------------------------------------------------
 
 def connect():
@@ -56,6 +58,7 @@ def connect():
     print('\nSuccessfully Connected to your MySQL Database:', my_database)
 
     return connection
+
 
 def connectGen():
     '''
@@ -74,6 +77,7 @@ def connectGen():
 
     return genConnection
 
+
 def createDatabase(genConnection, databaseName):
     '''
     The createDatabase() function, provided with the genConnection and databaseName variables, creates a SQL database based on if it already exists. It will create one if it does not exist, and
@@ -85,10 +89,10 @@ def createDatabase(genConnection, databaseName):
         Returns None but creates a database if requested
     '''
     global my_database
-    if databaseName == my_database: # User provided a database name that matches the default, as such the default database name from the global variables is used
+    if databaseName == my_database:  # User provided a database name that matches the default, as such the default database name from the global variables is used
         print('Default database ' + databaseName + ' in use...')
 
-    else: # Else, set the my_database variable to the new user inputted one, create if not exists by general cursor
+    else:  # Else, set the my_database variable to the new user inputted one, create if not exists by general cursor
 
         my_database = databaseName
         genConnection.get_warnings = True
@@ -101,10 +105,12 @@ def createDatabase(genConnection, databaseName):
             cursor.execute("SHOW DATABASES")
             for x in cursor:
                 print(x)
-        elif(tuple[0][1] == 1007): # Error code 1007 occurs if that database name already exists, as such error is handled
+        elif (tuple[0][
+                  1] == 1007):  # Error code 1007 occurs if that database name already exists, as such error is handled
             print('\nDatabase ' + databaseName + ' already exists')
 
         cursor.close()
+
 
 def createTable(connection, tableName):
     '''
@@ -128,7 +134,8 @@ def createTable(connection, tableName):
                                                     "reqcpus int unsigned NOT NULL, nodelist TEXT NOT NULL, qos varchar(20))")
     tuple = cursor.fetchwarnings()  # <- returns a list of tuples
 
-    cursor.execute("CREATE TABLE IF NOT EXISTS lastReadin (hpcID varchar(30) NOT NULL UNIQUE, lastReadinFile varchar(30) NOT NULL) ")
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS lastReadin (hpcID varchar(30) NOT NULL UNIQUE, lastReadinFile varchar(30) NOT NULL) ")
     if tuple is None:
         print('New table ' + tableName + ' generated')
         # ALl permissions granted, no warning message or message in general outputted to the user, no need for conditional statements
@@ -153,10 +160,10 @@ def createTable(connection, tableName):
 
         connection.commit()  # Commits any tables and indices that were created to the database
         print('Indexes created\n')
-    elif (tuple[0][1] == 1050): # Error code 1050 occurs if the table already exists, error handeling
+    elif (tuple[0][1] == 1050):  # Error code 1050 occurs if the table already exists, error handeling
         print('Table ' + tableName + ' already exists\n')
 
-    date = '1999-01-01.txt' # Date must be a value that is before any of the dates the accounting was run on, as such a arbitary date long in the past was selected - Do not change
+    date = '1999-01-01.txt'  # Date must be a value that is before any of the dates the accounting was run on, as such a arbitary date long in the past was selected - Do not change
 
     add_data = ("INSERT IGNORE INTO lastReadin (hpcID, lastReadinFile) "
                 "VALUES (%(hpcID)s, %(lastReadinFile)s)")
@@ -164,9 +171,11 @@ def createTable(connection, tableName):
         'hpcID': tableName,
         'lastReadinFile': date,
     }
-    cursor.execute(add_data, data, multi=True) # Running command to create lastReadin table and inserting the 'date' variable into it
+    cursor.execute(add_data, data,
+                   multi=True)  # Running command to create lastReadin table and inserting the 'date' variable into it
     connection.commit()
     cursor.close()
+
 
 def timeConversion(raw):
     '''
@@ -242,14 +251,15 @@ def timeConversion(raw):
 
         if re.search('\:', raw) is None:  # Working
             # (MM) Format
-            case1 = 'Partition_Limit' # Check to see if raw is not in the typical time-format and as such passing in global variable partition_limit
-            case2 = 'Partition Limit' # if matches test cases
+            case1 = 'Partition_Limit'  # Check to see if raw is not in the typical time-format and as such passing in global variable partition_limit
+            case2 = 'Partition Limit'  # if matches test cases
             if raw.casefold() == case1.casefold() or raw.casefold() == case2.casefold():
-               max_minutes = partition_limit
+                max_minutes = partition_limit
             else:
                 max_minutes = int(raw)
 
     return max_minutes
+
 
 def injection(connection, tableName):
     '''
@@ -270,7 +280,7 @@ def injection(connection, tableName):
 
     dashCheck = my_parent_dir[-1]
     if dashCheck != "/":
-        adjustment = my_parent_dir + "/" #Adds / to provided accounting data directory path if user didn't specify correctly path
+        adjustment = my_parent_dir + "/"  # Adds / to provided accounting data directory path if user didn't specify correctly path
         source = adjustment + tableName
     else:
         source = my_parent_dir + tableName
@@ -289,33 +299,40 @@ def injection(connection, tableName):
         if not os.path.isfile(filename):
             continue
 
+        if filename == "errorlog.txt":  # Skips reading in text file that holds all errors while inserting the accounting data
+            continue
+
         # Open a new cursor in existing connection.
         cursor = connection.cursor()
 
         cursor.execute("SELECT lastReadinFile FROM lastReadin WHERE hpcID='" + tableName + "'")
         hpcList = cursor.fetchall()
-        tupleBreakdown = [] # tupleBreakdown will only access the first value in hpcList because hpcList is a tuple that carries only the last readin filename (which in our specific case is the last date the
-        tupleBreakdown += hpcList[0] # data was commited to the HPC data table -> EX. HPCList:  [('2022-10-05.txt',)]
-        lastReadinFile = tupleBreakdown[0] # As such, the tuple must be spliced into a text format which is used in the comparison with the filename to see if the currently reviewed filename is newer than the last readin file
+        tupleBreakdown = []  # tupleBreakdown will only access the first value in hpcList because hpcList is a tuple that carries only the last readin filename (which in our specific case is the last date the
+        tupleBreakdown += hpcList[0]  # data was commited to the HPC data table -> EX. HPCList:  [('2022-10-05.txt',)]
+        lastReadinFile = tupleBreakdown[
+            0]  # As such, the tuple must be spliced into a text format which is used in the comparison with the filename to see if the currently reviewed filename is newer than the last readin file
 
-        if lastReadinFile >= filename: # This means for loop has gotten to most recent file that has been inserted
+        if lastReadinFile >= filename:  # This means for loop has gotten to most recent file that has been inserted
             # As such, skip insert
             continue
         # If the current filename is newer than the last readin file, insert accounting data to table
 
         fileSize = os.path.getsize(filename)
         fileExists = exists(source + '/' + filename)
-        permissionCode = oct(os.stat(filename).st_mode & 0o777)[2:] # Returns the permission code (P.C) of filename (P.C being what degree of read access is available for a specific file)
-        readAccess = os.access(filename, os.R_OK) # Returns bool value of whether a file has read access
+        permissionCode = oct(os.stat(filename).st_mode & 0o777)[
+                         2:]  # Returns the permission code (P.C) of filename (P.C being what degree of read access is available for a specific file)
+        readAccess = os.access(filename, os.R_OK)  # Returns bool value of whether a file has read access
 
         if fileSize == 0 or fileExists is False:
             total_files_skipped += 1
-            print("\nERROR: File: ", filename, " is empty, skipping file") # Error handling - empty/non existant files
+            print("\nERROR: File ", filename, " is empty, skipping file")  # Error handling - empty/non existant files
+            errorWrite(errorStatement="ERROR: File {} is empty, skipping file\n".format(filename))
             continue
 
         elif readAccess is False:
             total_files_skipped += 1
             print("\nERROR: File: ", filename, " is inaccessible, cannot be read due to chmod permission code ", permissionCode, ", skipping file")  # Error handling - lacking read permission access to file
+            errorWrite(errorStatement="ERROR: File {} is inaccessible, cannot be read due to chmod permission code {}, skipping file\n".format(filename, permissionCode))
             continue
         readIn = open(filename, 'r')
         firstline = next(readIn)
@@ -323,9 +340,11 @@ def injection(connection, tableName):
         record_size = len(firstline.split('|'))
         if record_size != SHORT_RECORD_LEN and record_size != QOS_RECORD_LEN:
             total_files_skipped += 1
-            print("\nERROR: Records with", record_size, "fields are not supported, skipping file", filename) # Error handling if the feilds in the data are not curretnly supported by table
+            print("\nERROR: Records with", record_size, "fields are not supported, skipping file",
+                  filename)  # Error handling if the fields in the data are not currently supported by table
+            errorWrite(errorStatement="ERROR: Records with {} fields are not supported, skipping file {}\n".format(record_size, filename))
             continue
-    # Read the first line of the file to determine the record format.
+        # Read the first line of the file to determine the record format.
         # Read the rest of the file line by line.
         lineno = 1
         try:
@@ -338,8 +357,8 @@ def injection(connection, tableName):
                 size = len(row)
                 if size != record_size:
                     total_errors += 1
-                    print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line",
-                          lineno)
+                    print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line", lineno)
+                    errorWrite(errorStatement="ERROR: Record has {} fields, expected {} fields in {} line {}\n{}\n".format(size, record_size, filename, lineno, line))
                     continue
 
                 # Assign fields from left to right.
@@ -369,8 +388,8 @@ def injection(connection, tableName):
 
                 state = str(row[9])
 
-                nnodes = intTryParse(row[10], filename, lineno)
-                reqcpus = intTryParse(row[11], filename, lineno)
+                nnodes = intTryParse(row[10], filename, lineno, line)
+                reqcpus = intTryParse(row[11], filename, lineno, line)
                 nodelist = str(row[12])
 
                 # Optional fields depending on record length.
@@ -399,19 +418,20 @@ def injection(connection, tableName):
                     'qos': qos,
                 }
 
-
                 cursor.execute(add_data, data)
             # Commit after writing all the data of the current file into the table
-            cursor.execute("UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'") # Update the LRF of row of correct HPCID with correct LRF
+            cursor.execute(
+                "UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'")  # Update the LRF of row of correct HPCID with correct LRF
             connection.commit()
         except ValueError:
-            print("\n VALUE ERROR: Program exited due to a error of one the datapoints on line #", lineno,
-                  "in file", filename, "\n Line:", line)
+            print("\nVALUE ERROR: Program exited due to a error of one the datapoints on line ", lineno,
+                  "in file", filename, "\n", line)
+            errorWrite(errorStatement="VALUE ERROR: Program exited due to a error of one the datapoints on line {} in file {}\n{}\n".format(lineno, filename, line))
             sys.exit(1)
 
         # Print progress message over the last message without newline.
         filecount += 1
-        progress = "Last file committed: " + str(filecount) + " - " + filename + "       "
+        progress = "\nLast file committed: " + str(filecount) + " - " + filename + "       "
         print(progress, end='\r')
 
         # Clean up.
@@ -421,12 +441,14 @@ def injection(connection, tableName):
     end = datetime.now()
     print('\nEnd: ', end)
 
-def intTryParse(value, filename, lineno):
+
+def intTryParse(value, filename, lineno, line):
     '''
     The intTryParse() function documents any attempted files that have an issue (Different amount of variables in the data, etc.)
     :param value:
     :param filename: function provided object that holds the currently read filename in the injection() function
-    :param lineno: function provided value that holds the current line that is being read in for each respective file name
+    :param lineno: function provided value that holds the current line number that is being read in for each respective file name
+    :param line: function provided value that holds the current line that is being read in so the user can look at exactly where the error is
     :return: None
     '''
     try:
@@ -435,7 +457,17 @@ def intTryParse(value, filename, lineno):
         global total_errors
         total_errors += 1
         print("\nERROR: Integer conversion in file ", filename, "line", lineno)
+        errorWrite(errorStatement="ERROR: Integer conversion in file {} on line {}\n{}\n".format(filename, lineno, line))
         return 0
+def errorWrite(errorStatement):
+    '''
+    The errorWrite() function writes any errors that were outputted while inserting the accouting data to "errorlog.txt", a file stored on the directory of the HPC being readin
+    :param errorStatement: function provided string object that holds the error statement that was printed
+    :return: None
+    Returns none but creates and appends "errorlog.txt" with each error statement printed due to any addressed issue
+    '''
+    with open("errorlog.txt", "a") as f:
+        f.write(errorStatement)
 
 def main():
     global my_database
@@ -446,11 +478,12 @@ def main():
         try:
 
             print("Please enter the correct amount of command-line arguments (2) in their respective order: "
-                      "\npython3 HPCDataLoad.py [Table Name]")
+                  "\npython3 HPCDataLoad.py [Table Name]")
             sys.exit(1)
         except ValueError:
-                print("Incorrect number of arguments submitted, please make sure to enter the correct amount of command-line arguments (2) in their respective order: "
-                      "\npython3 HPCDataLoad.py [Table Name]")
+            print(
+                "Incorrect number of arguments submitted, please make sure to enter the correct amount of command-line arguments (2) in their respective order: "
+                "\npython3 HPCDataLoad.py [Table Name]")
 
     databaseName = my_database
     tableName = sys.argv[1]
@@ -467,5 +500,7 @@ def main():
 
     connection.close()
     sys.exit(1)
+
+
 if __name__ == '__main__':
     main()
