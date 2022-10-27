@@ -128,9 +128,9 @@ def createTable(connection, tableName):
 
     # Established each column (name, type, length, null status) of the newly created table
     cursor.execute(
-        "CREATE TABLE IF NOT EXISTS " + tableName + " (jobid varchar(30) NOT NULL PRIMARY KEY, user varchar(80) NOT NULL, account varchar(60) NOT NULL, "
+        "CREATE TABLE IF NOT EXISTS " + tableName + " (jobid varchar(30) NOT NULL PRIMARY KEY, user varchar(80) NOT NULL, account varchar(64) NOT NULL, "
                                                     "start datetime NOT NULL, end datetime NOT NULL, submit datetime NOT NULL, queue varchar(30) NOT NULL, "
-                                                    "max_minutes int unsigned NOT NULL, jobname varchar(60) NOT NULL, state varchar(20) NOT NULL, nnodes int unsigned NOT NULL, "
+                                                    "max_minutes int unsigned NOT NULL, jobname varchar(64) NOT NULL, state varchar(20) NOT NULL, nnodes int unsigned NOT NULL, "
                                                     "reqcpus int unsigned NOT NULL, nodelist TEXT NOT NULL, qos varchar(20))")
     tuple = cursor.fetchwarnings()  # <- returns a list of tuples
 
