@@ -2,17 +2,11 @@ from __future__ import print_function
 import sys
 from datetime import datetime
 import mysql.connector
-from mysql.connector import errorcode
 import os
 from os.path import exists
 import re
 import pytz
-import logging
-from typing import List
-import socket
-import math
-import shutil
-import time
+import linecache
 
 # **************************************************************
 # ASSIGN THESE RUNTIME PARAMETERS FOR YOUR ENVIRONMENT
@@ -37,18 +31,17 @@ partition_limit = 2880  # Default time limit for max job runtimes in TACC HPC sy
 # GLOBAL variables and constants.
 total_errors = 0
 total_files_skipped = 0
+total_field_errors = 0
 filecount = 0
 
 # Number of pipe-separated fields in raw input files
 SHORT_RECORD_LEN = 13
 QOS_RECORD_LEN = 14
-
-
 # ---------------------------------------------------
 
 def connect():
     '''
-    The connect() function is a function that establishes a connection between the provided SQl user database and Python via the mysql.connector library package
+    The connect() function is a function that establishes a connection between the provided SQl user database and Python via the mysql.connector library package.
 
     :return:
         connection: function variable that holds the connection properties to the provided SQL database to run certain commands in Python as if it were a SQL command
@@ -64,11 +57,11 @@ def connectGen():
     '''
     The connectGen() function creates a general connection this python script and MySQL to run SQL commands. This is different than connect() as it is a more general connection,
     as in connect(), it is a connection that is tied to database and can only run SQL commands in that specific database. connectGen() can run SQL commands in a more general sense that
-    is outside the scope of a specific database
+    is outside the scope of a specific database.
 
     :return:
-        genConnection: function variable that holds a general cursor-type attribute, which is passed into different functions that need to use a SQL command that can only be processed via
-        the cursor
+        genConnection: Function variable that holds a general cursor-type attribute, which is passed into different functions that need to use a SQL command that can only be processed via
+        the cursor.
     '''
 
     genConnection = mysql.connector.connect(host=my_host, user=my_user, passwd=my_passwd)
@@ -81,12 +74,13 @@ def connectGen():
 def createDatabase(genConnection, databaseName):
     '''
     The createDatabase() function, provided with the genConnection and databaseName variables, creates a SQL database based on if it already exists. It will create one if it does not exist, and
-    will use the provided default database if no database is requested
+    will use the provided default database if no database is requested.
 
-    :param genConnection: function provided variable that holds the SQL-Python connection property, which is used to create a temporary cursor object in this function
-    :param databaseName: function provided object holding the user-defined SQL database name
+    :param genConnection: Function provided variable that holds the SQL-Python connection property, which is used to create a temporary cursor object in this function.
+    :param databaseName: Function provided object holding the user-defined SQL database name.
     :return: None
-        Returns None but creates a database if requested
+        Returns None but creates a database if requested.
+
     '''
     global my_database
     if databaseName == my_database:  # User provided a database name that matches the default, as such the default database name from the global variables is used
@@ -118,8 +112,8 @@ def createTable(connection, tableName):
     if it does not already exist, as well as a lastReadin table, which is a table that stores the date of the last commited read in file to its respective HPC table to reduce overall runtime
     and increase efficiency.
 
-    :param connection: function provided variable that holds a connection with the SQL instance, utilized by creating a temporary cursor object to run certain SQL commands
-    :param tableName: function provided variable that holds the requested table name
+    :param connection: Function provided variable that holds a connection with the SQL instance, utilized by creating a temporary cursor object to run certain SQL commands.
+    :param tableName: Function provided variable that holds the requested table name.
     :return: None
 
     '''
@@ -182,10 +176,10 @@ def timeConversion(raw):
     The timeConversion() function takes the unspliced Timelimit column from the provided accounting data and based on the data's different formating, converts the time into a standard format
     that is returned to the injection() function. In the SQL table, this column is renamed to max_minutes.
 
-    :param raw: function provided object that holds the unspliced Timelimit data that holds the max amount of time a job can run for. This data is in a txt format and as such is convereted into a valid
-    decimal time format, in this case, is converted into minutes. For instance, 2-00:00:00 would be converted into 2880 minutes. There are different formats, and are handeled below
+    :param raw: Function provided object that holds the unspliced Timelimit data that holds the max amount of time a job can run for. This data is in a txt format and as such is convereted into a valid
+    decimal time format, in this case, is converted into minutes. For instance, 2-00:00:00 would be converted into 2880 minutes. There are different formats, and are handeled below.
     :return: max_minutes
-        Object that holds the converted time value for the Timelimit column, which is returned to injection() function
+        Object that holds the converted time value for the Timelimit column, which is returned to injection() function.
 
     '''
     dash_position = raw.find('-')
@@ -253,7 +247,8 @@ def timeConversion(raw):
             # (MM) Format
             case1 = 'Partition_Limit'  # Check to see if raw is not in the typical time-format and as such passing in global variable partition_limit
             case2 = 'Partition Limit'  # if matches test cases
-            if raw.casefold() == case1.casefold() or raw.casefold() == case2.casefold():
+            case3 = ""
+            if raw.casefold() == case1.casefold() or raw.casefold() == case2.casefold() or raw.casefold() == case3.casefold():
                 max_minutes = partition_limit
             else:
                 max_minutes = int(raw)
@@ -265,16 +260,17 @@ def injection(connection, tableName):
     '''
     The injection() function finds the directory where the requested HPC accounting data is held, and line by line for each file, inserts the accounting data into its respective HPC SQL data table.
     injection() will not insert data if it previously has been inserted into the table, utilized by the functionality of the lastReadin SQL data table, which checks to see the current filename
-    is newer than the date of the last commited file
+    is newer than the date of the last commited file.
 
     Each accounting data for each submitted job is in the following format the majority of time except for certain cases:
     JobID|User|Account|Start|End|Submit|Partition|Timelimit|JobName|State|NNodes|ReqCPUS|NodeList|QOS
-    As such, each line is spliced and converted into proper data types
+    As such, each line is spliced and converted into proper data types.
 
-    :param connection: function provided variable that holds a connection with the SQL instance, utilized by creating a temporary cursor object to run certain SQL commands
-    :param tableName: function provided variable that holds the requested table name
+    :param connection: Function provided variable that holds a connection with the SQL instance, utilized by creating a temporary cursor object to run certain SQL commands.
+    :param tableName: Function provided variable that holds the requested table name.
     :return: None
-        None is returned but the accounting data is inserted into the SQL data table
+        None is returned but the accounting data is inserted into the SQL data table.
+
     '''
     # Assign the actual directory that contains all the input files.
 
@@ -291,6 +287,7 @@ def injection(connection, tableName):
     global filecount
     global total_errors
     global total_files_skipped
+    global total_field_errors
 
     start = datetime.now()
     print('Start: ', start)
@@ -309,9 +306,7 @@ def injection(connection, tableName):
         hpcList = cursor.fetchall()
         tupleBreakdown = []  # tupleBreakdown will only access the first value in hpcList because hpcList is a tuple that carries only the last readin filename (which in our specific case is the last date the
         tupleBreakdown += hpcList[0]  # data was commited to the HPC data table -> EX. HPCList:  [('2022-10-05.txt',)]
-        lastReadinFile = tupleBreakdown[
-            0]  # As such, the tuple must be spliced into a text format which is used in the comparison with the filename to see if the currently reviewed filename is newer than the last readin file
-
+        lastReadinFile = tupleBreakdown[0]  # As such, the tuple must be spliced into a text format which is used in the comparison with the filename to see if the currently reviewed filename is newer than the last readin file
         if lastReadinFile >= filename:  # This means for loop has gotten to most recent file that has been inserted
             # As such, skip insert
             continue
@@ -319,31 +314,31 @@ def injection(connection, tableName):
 
         fileSize = os.path.getsize(filename)
         fileExists = exists(source + '/' + filename)
-        permissionCode = oct(os.stat(filename).st_mode & 0o777)[
-                         2:]  # Returns the permission code (P.C) of filename (P.C being what degree of read access is available for a specific file)
+        permissionCode = oct(os.stat(filename).st_mode & 0o777)[2:]  # Returns the permission code (P.C) of filename (P.C being what degree of read access is available for a specific file)
         readAccess = os.access(filename, os.R_OK)  # Returns bool value of whether a file has read access
 
         if fileSize == 0 or fileExists is False:
             total_files_skipped += 1
             print("\nERROR: File ", filename, " is empty, skipping file")  # Error handling - empty/non existant files
-            writeError(errorStatement="ERROR: File {} is empty, skipping file\n".format(filename))
+            writeError(errorStatement=f"ERROR: File {filename} is empty, skipping file\n")
             continue
 
         elif readAccess is False:
             total_files_skipped += 1
             print("\nERROR: File: ", filename, " is inaccessible, cannot be read due to chmod permission code ", permissionCode, ", skipping file")  # Error handling - lacking read permission access to file
-            writeError(errorStatement="ERROR: File {} is inaccessible, cannot be read due to chmod permission code {}, skipping file\n".format(filename, permissionCode))
+            writeError(errorStatement=f"ERROR: File {filename} is inaccessible, cannot be read due to chmod permission code {permissionCode}, skipping file\n")
             continue
-        readIn = open(filename, 'r')
+
+        result = detectBadFirstln(filename)
+        if result is True: # Bad first and second line, skip entire file
+            continue
+
+        readIn = open(filename, "r")
         firstline = next(readIn)
         # Establish this file's record size.
-        record_size = len(firstline.split('|'))
-        if record_size != SHORT_RECORD_LEN and record_size != QOS_RECORD_LEN:
-            total_files_skipped += 1
-            print("\nERROR: Records with", record_size, "fields are not supported, skipping file",
-                  filename)  # Error handling if the fields in the data are not currently supported by table
-            writeError(errorStatement="ERROR: Records with {} fields are not supported, skipping file {}\n".format(record_size, filename))
-            continue
+        record_size = len(firstline.split("|"))
+        if type(result) == int: # If the first line is bad but the second line is good detectBadFirstln() sets the record size to the length of the good record size and returns said value
+            record_size = result
         # Read the first line of the file to determine the record format.
         # Read the rest of the file line by line.
         lineno = 1
@@ -352,13 +347,13 @@ def injection(connection, tableName):
                 # Assign line number
                 lineno += 1
 
-                # Parse next line and validate number of fields.
+                # Parse next line and validate number of fields
                 row = line.split('|')
                 size = len(row)
                 if size != record_size:
                     total_errors += 1
                     print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line", lineno)
-                    writeError(errorStatement="ERROR: Record has {} fields, expected {} fields in {} line {}\n{}\n".format(size, record_size, filename, lineno, line))
+                    writeError(errorStatement=f"ERROR: Record has {size} fields, expected {record_size} fields in file {filename} line {lineno}\n{line}\n")
                     continue
 
                 # Assign fields from left to right.
@@ -390,8 +385,9 @@ def injection(connection, tableName):
 
                 nnodes = intTryParse(row[10], filename, lineno, line)
                 reqcpus = intTryParse(row[11], filename, lineno, line)
-                nodelist = str(row[12])
 
+                nodelisttmp = str(row[12])
+                nodelist = nodelisttmp.strip("\n") # Removes \n at the end of nodelist
                 # Optional fields depending on record length.
                 qos = None
                 if record_size == QOS_RECORD_LEN:
@@ -424,8 +420,7 @@ def injection(connection, tableName):
                 "UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'")  # Update the LRF of row of correct HPCID with correct LRF
             connection.commit()
         except ValueError:
-            print("\nVALUE ERROR: Program exited due to a error of one the datapoints on line ", lineno,
-                  "in file", filename, "\n", line)
+            print("\nVALUE ERROR: Program exited due to a error of one the datapoints on line", lineno, "in file", filename, "\n", line)
             sys.exit(1)
 
         # Print progress message over the last message without newline.
@@ -441,14 +436,61 @@ def injection(connection, tableName):
     print('\nEnd: ', end)
 
 
+def detectBadFirstln(filename):
+    '''
+    The detectBadFirstln() function checks to see if the first line of an accounting dataset text file is the expected header that details the columns names. If this is not the case
+    and rather the text file goes straight into the dataset, detectBadFirstln() will check if the first lines record size is equal to the expected value of either SHORT_RECORD_LEN or
+    QOS_RECORD_LEN. If this not the case and instead the first line is faulty (defined as where the record size is < SHORT_RECORD_LEN), detectBadFirstln() checks to see if the following line is
+    equal to the expected value. If this is the case, detectBadFirstln() sets the record_size to the value of the record size of the second line. If both the first and second line are still
+    < SHORT_RECORD_LEN, the entire file is treated as faulty and is skipped. detectBadFirstln() returns either a boolean (True if the file is faulty or False if the file is good) or record_size based on the conditions
+    mentioned previously.
+
+    :param filename: Function provided object the holds the current file being read in by the injection() function.
+    :return: True/False (True if the file is faulty or False if the file is good) or record_size (If the first line is faulty but the second line(And presumingly the rest of the file) is not faulty).
+
+    '''
+    global SHORT_RECORD_LEN
+    global QOS_RECORD_LEN
+    global total_errors
+    global total_field_errors
+    global total_files_skipped
+
+
+    readIn = open(filename, "r")
+    firstline = next(readIn)
+    record_size = len(firstline.split("|"))
+
+    if record_size not in [SHORT_RECORD_LEN, QOS_RECORD_LEN]:  # Case where the first line is not the expected formatting line and goes straight into the dataset instead
+        if record_size < SHORT_RECORD_LEN:
+            total_errors += 1
+            total_field_errors += 1
+            firstlineno = 1
+            writeError(errorStatement=f"ERROR: Line {firstlineno} in file {filename} has {record_size} fields, which is not supported due to missing information, skipping line\n{firstline}\n")
+            secondline = linecache.getline(filename, 2)
+            record_size2 = len(secondline.split("|"))
+            if record_size2 not in [SHORT_RECORD_LEN, QOS_RECORD_LEN]:
+                total_files_skipped += 1
+                print("\nERROR: Records with", record_size2, "fields are not supported, skipping file", filename)  # Error handling if the fields in the data are not currently supported by table
+                writeError(errorStatement=f"ERROR: Records with {record_size2} fields are not supported, skipping file {filename}\n")
+                return True
+            else:
+                record_size = record_size2
+                return record_size
+        elif record_size > QOS_RECORD_LEN:
+            # For instance where the firstline is not the expected formatting line and is instead accounting data that needs corrections due to extra unnecessary columns, send to be reparsed
+            return True
+
+    return False
+
 def intTryParse(value, filename, lineno, line):
     '''
-    The intTryParse() function documents any attempted files that have an issue (Different amount of variables in the data, etc.)
-    :param value:
-    :param filename: function provided object that holds the currently read filename in the injection() function
-    :param lineno: function provided value that holds the current line number that is being read in for each respective file name
-    :param line: function provided value that holds the current line that is being read in so the user can look at exactly where the error is
+    The intTryParse() function documents any attempted files that have an issue (Different amount of variables in the data, etc.).
+    :param value: Function provided object that holds the parsed value of either nnodes or reqcpus.
+    :param filename: Function provided object that holds the currently read filename in the injection() function.
+    :param lineno: Function provided value that holds the current line number that is being read in for each respective file name.
+    :param line: Function provided value that holds the current line that is being read in so the user can look at exactly where the error is.
     :return: None
+
     '''
     try:
         return int(value)
@@ -456,14 +498,16 @@ def intTryParse(value, filename, lineno, line):
         global total_errors
         total_errors += 1
         print("\nERROR: Integer conversion in file ", filename, "line", lineno)
-        writeError(errorStatement="ERROR: Integer conversion in file {} on line {}\n{}\n".format(filename, lineno, line))
+        writeError(errorStatement=f"ERROR: Integer conversion in file {filename} on line {lineno}\n{line}\n")
         return 0
+
 def writeError(errorStatement):
     '''
-    The writeError() function writes all non-fatal errors that were outputted while inserting the accouting data to "errorlog.txt", a file stored on the directory of the HPC being readin
-    :param errorStatement: function provided string object that holds the error statement that was printed
+    The writeError() function writes all non-fatal errors that were outputted while inserting the accouting data to "errorlog.txt", a file stored on the directory of the HPC being readin.
+    :param errorStatement: Function provided string object that holds the error statement that was printed.
     :return: None
-    Returns none but creates and appends "errorlog.txt" with each error statement printed due to any addressed issue
+    Returns none but creates and appends "errorlog.txt" with each error statement printed due to any addressed issue.
+
     '''
     with open("errorlog.txt", "a") as f:
         f.write(errorStatement)
@@ -486,8 +530,7 @@ def main():
 
     databaseName = my_database
     tableName = sys.argv[1]
-    createDatabase(genConnection,
-                   databaseName)  # Checks to see if the inputted database name is equal to the default name or not, if not, create new database to access and create tables in
+    createDatabase(genConnection, databaseName)  # Checks to see if the inputted database name is equal to the default name or not, if not, create new database to access and create tables in
 
     connection = connect()
     createTable(connection, tableName)
