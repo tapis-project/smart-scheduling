@@ -37,6 +37,8 @@ filecount = 0
 # Number of pipe-separated fields in raw input files
 SHORT_RECORD_LEN = 13
 QOS_RECORD_LEN = 14
+
+
 # ---------------------------------------------------
 
 def connect():
@@ -260,7 +262,7 @@ def injection(connection, tableName):
     '''
     The injection() function finds the directory where the requested HPC accounting data is held, and line by line for each file, inserts the accounting data into its respective HPC SQL data table.
     injection() will not insert data if it previously has been inserted into the table, utilized by the functionality of the lastReadin SQL data table, which checks to see the current filename
-    is newer than the date of the last commited file.
+    is newer than the date of the last committed file.
 
     Each accounting data for each submitted job is in the following format the majority of time except for certain cases:
     JobID|User|Account|Start|End|Submit|Partition|Timelimit|JobName|State|NNodes|ReqCPUS|NodeList|QOS
@@ -306,7 +308,8 @@ def injection(connection, tableName):
         hpcList = cursor.fetchall()
         tupleBreakdown = []  # tupleBreakdown will only access the first value in hpcList because hpcList is a tuple that carries only the last readin filename (which in our specific case is the last date the
         tupleBreakdown += hpcList[0]  # data was commited to the HPC data table -> EX. HPCList:  [('2022-10-05.txt',)]
-        lastReadinFile = tupleBreakdown[0]  # As such, the tuple must be spliced into a text format which is used in the comparison with the filename to see if the currently reviewed filename is newer than the last readin file
+        lastReadinFile = tupleBreakdown[
+            0]  # As such, the tuple must be spliced into a text format which is used in the comparison with the filename to see if the currently reviewed filename is newer than the last readin file
         if lastReadinFile >= filename:  # This means for loop has gotten to most recent file that has been inserted
             # As such, skip insert
             continue
@@ -314,7 +317,8 @@ def injection(connection, tableName):
 
         fileSize = os.path.getsize(filename)
         fileExists = exists(source + '/' + filename)
-        permissionCode = oct(os.stat(filename).st_mode & 0o777)[2:]  # Returns the permission code (P.C) of filename (P.C being what degree of read access is available for a specific file)
+        permissionCode = oct(os.stat(filename).st_mode & 0o777)[
+                         2:]  # Returns the permission code (P.C) of filename (P.C being what degree of read access is available for a specific file)
         readAccess = os.access(filename, os.R_OK)  # Returns bool value of whether a file has read access
 
         if fileSize == 0 or fileExists is False:
@@ -325,20 +329,22 @@ def injection(connection, tableName):
 
         elif readAccess is False:
             total_files_skipped += 1
-            print("\nERROR: File: ", filename, " is inaccessible, cannot be read due to chmod permission code ", permissionCode, ", skipping file")  # Error handling - lacking read permission access to file
-            writeError(errorStatement=f"ERROR: File {filename} is inaccessible, cannot be read due to chmod permission code {permissionCode}, skipping file\n")
+            print("\nERROR: File: ", filename, " is inaccessible, cannot be read due to chmod permission code ",
+                  permissionCode, ", skipping file")  # Error handling - lacking read permission access to file
+            writeError(
+                errorStatement=f"ERROR: File {filename} is inaccessible, cannot be read due to chmod permission code {permissionCode}, skipping file\n")
             continue
 
-        result = detectBadFirstln(filename)
-        if result is True: # Bad first and second line, skip entire file
+        badFirstLnResult = detectBadFirstln(filename)
+        if badFirstLnResult is True:  # Bad first and second line, skip entire file
             continue
 
         readIn = open(filename, "r")
         firstline = next(readIn)
         # Establish this file's record size.
         record_size = len(firstline.split("|"))
-        if type(result) == int: # If the first line is bad but the second line is good detectBadFirstln() sets the record size to the length of the good record size and returns said value
-            record_size = result
+        if type(badFirstLnResult) == int:  # If the first line is bad but the second line is good detectBadFirstln() sets the record size to the length of the good record size and returns said value
+            record_size = badFirstLnResult
         # Read the first line of the file to determine the record format.
         # Read the rest of the file line by line.
         lineno = 1
@@ -352,9 +358,16 @@ def injection(connection, tableName):
                 size = len(row)
                 if size != record_size:
                     total_errors += 1
-                    print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line", lineno)
+                    print("\nERROR: Record has", size, "fields, expected", record_size, "fields in", filename, "line", lineno, "Attempting repair")
                     writeError(errorStatement=f"ERROR: Record has {size} fields, expected {record_size} fields in file {filename} line {lineno}\n{line}\n")
-                    continue
+                    #if row[size - 1] == "":
+                        #ele = row.pop() # Removes last index if it is empty due to an unnecessary pipe
+                    repairOutcome = lineRepair(row, record_size, filename, lineno, line)  # Due to there being more than the expected amount of fields in the line, send to be repaired
+                    if repairOutcome is False:
+                        # If lineRepair is unable to repair, print error, also print in general to notify the user
+                        writeError(errorStatement=f"ERROR: Unsuccessful repair of line {lineno} in file {filename}\n")
+                        continue
+                    # else, use the return values and insert into dataset
 
                 # Assign fields from left to right.
                 jobid = str(row[0])
@@ -384,10 +397,11 @@ def injection(connection, tableName):
                 state = str(row[9])
 
                 nnodes = intTryParse(row[10], filename, lineno, line)
+
                 reqcpus = intTryParse(row[11], filename, lineno, line)
 
                 nodelisttmp = str(row[12])
-                nodelist = nodelisttmp.strip("\n") # Removes \n at the end of nodelist
+                nodelist = nodelisttmp.strip("\n")  # Removes \n at the end of nodelist
                 # Optional fields depending on record length.
                 qos = None
                 if record_size == QOS_RECORD_LEN:
@@ -420,7 +434,8 @@ def injection(connection, tableName):
                 "UPDATE lastReadin SET lastReadinFile = '" + filename + "' where hpcID = '" + tableName + "'")  # Update the LRF of row of correct HPCID with correct LRF
             connection.commit()
         except ValueError:
-            print("\nVALUE ERROR: Program exited due to a error of one the datapoints on line", lineno, "in file", filename, "\n", line)
+            print("\nVALUE ERROR: Program exited due to a error of one the datapoints on line", lineno, "in file",
+                  filename, "\n", line)
             sys.exit(1)
 
         # Print progress message over the last message without newline.
@@ -455,32 +470,108 @@ def detectBadFirstln(filename):
     global total_field_errors
     global total_files_skipped
 
-
     readIn = open(filename, "r")
     firstline = next(readIn)
     record_size = len(firstline.split("|"))
 
-    if record_size not in [SHORT_RECORD_LEN, QOS_RECORD_LEN]:  # Case where the first line is not the expected formatting line and goes straight into the dataset instead
+    if record_size not in [SHORT_RECORD_LEN,
+                           QOS_RECORD_LEN]:  # Case where the first line is not the expected formatting line and goes straight into the dataset instead
         if record_size < SHORT_RECORD_LEN:
             total_errors += 1
             total_field_errors += 1
             firstlineno = 1
-            writeError(errorStatement=f"ERROR: Line {firstlineno} in file {filename} has {record_size} fields, which is not supported due to missing information, skipping line\n{firstline}\n")
+            writeError(
+                errorStatement=f"ERROR: Line {firstlineno} in file {filename} has {record_size} fields, which is not supported due to missing information, skipping line\n{firstline}\n")
             secondline = linecache.getline(filename, 2)
             record_size2 = len(secondline.split("|"))
             if record_size2 not in [SHORT_RECORD_LEN, QOS_RECORD_LEN]:
                 total_files_skipped += 1
-                print("\nERROR: Records with", record_size2, "fields are not supported, skipping file", filename)  # Error handling if the fields in the data are not currently supported by table
-                writeError(errorStatement=f"ERROR: Records with {record_size2} fields are not supported, skipping file {filename}\n")
+                print("\nERROR: Records with", record_size2, "fields are not supported, skipping file",
+                      filename)  # Error handling if the fields in the data are not currently supported by table
+                writeError(
+                    errorStatement=f"ERROR: Records with {record_size2} fields are not supported, skipping file {filename}\n")
                 return True
             else:
                 record_size = record_size2
                 return record_size
         elif record_size > QOS_RECORD_LEN:
             # For instance where the firstline is not the expected formatting line and is instead accounting data that needs corrections due to extra unnecessary columns, send to be reparsed
-            return True
+            lineRepair(firstline, record_size)
 
     return False
+
+def lineRepair(row, record_size, filename, lineno, line):
+    global QOS_RECORD_LEN
+    global SHORT_RECORD_LEN
+    local = pytz.timezone("US/Central")
+    size = len(row)  # Must match record_size (Record Size of the file)
+
+    jobid = str(row[0])
+    user = str(row[1])
+    account = str(row[2])
+
+    local_start = datetime.strptime(row[3], '%Y-%m-%dT%H:%M:%S')
+    local_dt_strt = local.localize(local_start, is_dst=True)
+    start = local_dt_strt.astimezone(pytz.utc)
+
+    local_end = datetime.strptime(row[4], '%Y-%m-%dT%H:%M:%S')
+    local_dt_end = local.localize(local_end, is_dst=True)
+    end = local_dt_end.astimezone(pytz.utc)
+
+    local_submit = datetime.strptime(row[5], '%Y-%m-%dT%H:%M:%S')
+    local_dt_submit = local.localize(local_submit, is_dst=True)
+    submit = local_dt_submit.astimezone(pytz.utc)
+
+    queue = str(row[6])
+
+    raw = str(row[7])  # Raw is the max_minutes column
+    max_minutes = timeConversion(raw)
+
+    jobname = str(row[8])
+
+    if record_size == QOS_RECORD_LEN:
+        print("Record Size", record_size)
+        deltaSteps = size - record_size # The number of extra fields
+
+        qos = str(row[size - 1]) # row[13]
+        nodelisttmp = str(row[size - 2]) # row[12]
+        nodelist = nodelisttmp.strip("\n")  # Removes \n at the end of nodelist
+        reqcpus = intTryParse(row[size - 3], filename, lineno, line)
+        nnodes = intTryParse(row[size - 4], filename, lineno, line)
+        state = str(row[size - 5])
+
+        compilationtmp = ""
+
+        for i in range(1, deltaSteps + 1):
+            compilationtmp += ("?" + str(row[size - 4 - i]))
+            compilation = compilationtmp.replace(" ", "")
+        jobname += compilation
+
+        print("\nSYSTEM: Successful repair of line ", lineno, " in file ", filename, "\n")
+        writeError(errorStatement=f"SYSTEM: Successful repair of line {lineno} in file {filename}\n")
+        #return jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist, qos
+
+    elif record_size == SHORT_RECORD_LEN:
+        deltaSteps = size - record_size # The number of extra fields
+        nodelisttmp = str(row[size - 1])  # row[12]
+        nodelist = nodelisttmp.strip("\n")  # Removes \n at the end of nodelist
+        reqcpus = intTryParse(row[size - 2], filename, lineno, line)
+        nnodes = intTryParse(row[size - 3], filename, lineno, line)
+        state = str(row[size - 4])
+
+        compilationtmp = ""
+
+        for i in range(1, deltaSteps + 1):
+            compilationtmp += ("?" + str(row[size - 4 - i]))
+            compilation = compilationtmp.replace(" ", "")
+        jobname += compilation
+
+        print("\nSYSTEM: Successful repair of line ", lineno, " in file ", filename, "\n")
+        writeError(errorStatement=f"SYSTEM: Successful repair of line {lineno} in file {filename}\n")
+        #return jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist
+
+    return True
+
 
 def intTryParse(value, filename, lineno, line):
     '''
@@ -497,9 +588,19 @@ def intTryParse(value, filename, lineno, line):
     except:
         global total_errors
         total_errors += 1
-        print("\nERROR: Integer conversion in file ", filename, "line", lineno)
-        writeError(errorStatement=f"ERROR: Integer conversion in file {filename} on line {lineno}\n{line}\n")
-        return 0
+        print("\nERROR: Integer conversion in file ", filename, "line", lineno, "Repairing...")
+
+        if value.find("K") != -1:
+            repairtmp = "".join([a for a in value if a.isdigit()])
+            repair = repairtmp * 1000  # Many of the instances have been a value of K, representing 1000, as such multiplying
+            print("\nNnode value was successfully repaired")
+            writeError(
+                errorStatement=f"ERROR: Integer conversion in file {filename} on line {lineno}\n{line}\nValue was repaired")
+            return repair
+        else:
+            writeError(errorStatement=f"ERROR: Integer conversion in file {filename} on line {lineno}\n{line}\n")
+            return 0
+
 
 def writeError(errorStatement):
     '''
@@ -511,6 +612,7 @@ def writeError(errorStatement):
     '''
     with open("errorlog.txt", "a") as f:
         f.write(errorStatement)
+
 
 def main():
     global my_database
@@ -530,7 +632,8 @@ def main():
 
     databaseName = my_database
     tableName = sys.argv[1]
-    createDatabase(genConnection, databaseName)  # Checks to see if the inputted database name is equal to the default name or not, if not, create new database to access and create tables in
+    createDatabase(genConnection,
+                   databaseName)  # Checks to see if the inputted database name is equal to the default name or not, if not, create new database to access and create tables in
 
     connection = connect()
     createTable(connection, tableName)
