@@ -1,6 +1,6 @@
 # TACC Job Histories
 
-Part of the smart-scheduling project includes collecting and analysing historical job data.  This discussion describes how ICICLE team members can access to the job execution histories for several TACC HPC systems.  Members of ICICLE that have access to the Tapis *icicle* tenant can perform the following actions.
+Part of the smart-scheduling project includes collecting and analysing historical job data.  This discussion describes how ICICLE team members can access to the job execution histories for several TACC HPC systems.  Members of ICICLE that have access to the Tapis *icicle* tenant can perform the actions described here.
 
 The following discussion assumes team members are familiar with issuing command line calls, with *curl*, and with JSON data.  Most Tapis commands return JSON which can be piped to *jq* or a similar program for pretty printing.  The commands below assume **Linux**, if you're on another operating system slight adjustments might be necessary. 
 
@@ -42,8 +42,10 @@ where *access_token* is the text copied to the clipboard in the previous step.
 
 > curl -O -H "X-Tapis-Token: $JWT" https://icicle.tapis.io/v3/files/content/taccjobs/maverick_anon.csv.gz
 
+*binary data--do not try to pretty print*
+
 ## 5. Download All History Files
 
 > curl -o taccjobs.zip -H "X-Tapis-Token: $JWT" https://icicle.tapis.io/v3/files/content/taccjobs?zip=true
 
-
+*binary data--do not try to pretty print*
