@@ -28,23 +28,23 @@ If the previous step succeeded, the result will look something like this:
 
 Copy the value of access token to the clipboard.  The value is inside the double quotes after the 2nd "access_token" key: **eyJ...y_w**.  
 
-## 2. Assign JWT to an Environment Variable
+## 3. Assign JWT to an Environment Variable
 
 > export JWT=*access_token*
 
 where *access_token* is the text copied to the clipboard in the previous step.
 
-## 3. List Job History Files
+## 4. List Job History Files
 
 > curl -H "X-Tapis-Token: $JWT" https://icicle.tapis.io/v3/files/ops/taccjobs/
 
-## 4. Download a Single History File
+## 5. Download a Single History File
 
 > curl -O -H "X-Tapis-Token: $JWT" https://icicle.tapis.io/v3/files/content/taccjobs/maverick_anon.csv.gz
 
 *binary data--do not try to pretty print*
 
-## 5. Download All History Files
+## 6. Download All History Files
 
 > curl -o taccjobs.zip -H "X-Tapis-Token: $JWT" https://icicle.tapis.io/v3/files/content/taccjobs?zip=true
 
