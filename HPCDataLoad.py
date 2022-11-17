@@ -38,6 +38,22 @@ filecount = 0
 SHORT_RECORD_LEN = 13
 QOS_RECORD_LEN = 14
 
+# Data field naming for easier readability when calling specific elements in an array
+JOBID = 0
+USER = 1
+ACCOUNT = 2
+START_TIME = 3
+END_TIME = 4
+SUBMIT_TIME = 5
+QUEUE_TYPE = 6
+MAX_MINUTES = 7
+JOBNAME = 8
+JOB_STATE = 9
+NNODES = 10
+REQCPUS = 11
+NODELIST = 12
+QOS = 13
+
 
 # ---------------------------------------------------
 
@@ -101,8 +117,7 @@ def createDatabase(genConnection, databaseName):
             cursor.execute("SHOW DATABASES")
             for x in cursor:
                 print(x)
-        elif (tuple[0][
-                  1] == 1007):  # Error code 1007 occurs if that database name already exists, as such error is handled
+        elif (tuple[0][1] == 1007):  # Error code 1007 occurs if that database name already exists, as such error is handled
             print('\nDatabase ' + databaseName + ' already exists')
 
         cursor.close()
@@ -167,8 +182,7 @@ def createTable(connection, tableName):
         'hpcID': tableName,
         'lastReadinFile': date,
     }
-    cursor.execute(add_data, data,
-                   multi=True)  # Running command to create lastReadin table and inserting the 'date' variable into it
+    cursor.execute(add_data, data, multi=True)  # Running command to create lastReadin table and inserting the 'date' variable into it
     connection.commit()
     cursor.close()
 
@@ -370,42 +384,42 @@ def injection(connection, tableName):
                     # else, use the return values and insert into dataset
 
                 # Assign fields from left to right.
-                jobid = str(row[0])
-                user = str(row[1])
-                account = str(row[2])
+                jobid = str(row[JOBID])
+                user = str(row[USER])
+                account = str(row[ACCOUNT])
 
                 # Conversion to UTC for start, end and submit column variables
-                local_start = datetime.strptime(row[3], '%Y-%m-%dT%H:%M:%S')
+                local_start = datetime.strptime(row[SUBMIT_TIME], '%Y-%m-%dT%H:%M:%S')
                 local_dt_strt = local.localize(local_start, is_dst=True)
                 start = local_dt_strt.astimezone(pytz.utc)
 
-                local_end = datetime.strptime(row[4], '%Y-%m-%dT%H:%M:%S')
+                local_end = datetime.strptime(row[END_TIME], '%Y-%m-%dT%H:%M:%S')
                 local_dt_end = local.localize(local_end, is_dst=True)
                 end = local_dt_end.astimezone(pytz.utc)
 
-                local_submit = datetime.strptime(row[5], '%Y-%m-%dT%H:%M:%S')
+                local_submit = datetime.strptime(row[SUBMIT_TIME], '%Y-%m-%dT%H:%M:%S')
                 local_dt_submit = local.localize(local_submit, is_dst=True)
                 submit = local_dt_submit.astimezone(pytz.utc)
 
-                queue = str(row[6])
+                queue = str(row[QUEUE_TYPE])
 
-                raw = str(row[7])  # Raw is the max_minutes column
+                raw = str(row[MAX_MINUTES])
                 max_minutes = timeConversion(raw)
 
-                jobname = str(row[8])
+                jobname = str(row[JOBNAME])
 
-                state = str(row[9])
+                state = str(row[JOB_STATE])
 
-                nnodes = intTryParse(row[10], filename, lineno, line)
+                nnodes = intTryParse(row[NNODES], filename, lineno, line)
 
-                reqcpus = intTryParse(row[11], filename, lineno, line)
+                reqcpus = intTryParse(row[REQCPUS], filename, lineno, line)
 
-                nodelisttmp = str(row[12])
+                nodelisttmp = str(row[NODELIST])
                 nodelist = nodelisttmp.strip("\n")  # Removes \n at the end of nodelist
                 # Optional fields depending on record length.
                 qos = None
                 if record_size == QOS_RECORD_LEN:
-                    qos = str(row[13])
+                    qos = str(row[QOS])
 
                 add_data = ("INSERT IGNORE INTO " + tableName +
                             "(jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist, qos) "
@@ -474,8 +488,7 @@ def detectBadFirstln(filename):
     firstline = next(readIn)
     record_size = len(firstline.split("|"))
 
-    if record_size not in [SHORT_RECORD_LEN,
-                           QOS_RECORD_LEN]:  # Case where the first line is not the expected formatting line and goes straight into the dataset instead
+    if record_size not in [SHORT_RECORD_LEN, QOS_RECORD_LEN]:  # Case where the first line is not the expected formatting line and goes straight into the dataset instead
         if record_size < SHORT_RECORD_LEN:
             total_errors += 1
             total_field_errors += 1
@@ -501,40 +514,47 @@ def detectBadFirstln(filename):
     return False
 
 def lineRepair(row, record_size, filename, lineno, line):
+    '''
+    The lineRepair() function takes the current row that is being attempted to be inserted to the data table, but is unsuccesful to do so due to extra columns in the row, and corrects the line.
+    This is done, in this current iteration of this function tackles the case where the extra columns that exist are only between the jobname and state columns, by taking the current number of columns in the row and compares
+    that value to the expected number of columns the current file that is being read in specifies. The difference between these two values is taken to account, and as such the function iterates x amount of times until
+    the difference is met, combining the extra column(s) data into one unified object, and adds it to the jobname column (with "?" marks included to note that these new additions were not how the data was originally).
+    An error is written to the errorlog.txt file documenting this effort to notify the user to correct their dataset, and inserts this corrected row to the dataset.
+    '''
     global QOS_RECORD_LEN
     global SHORT_RECORD_LEN
     local = pytz.timezone("US/Central")
     size = len(row)  # Must match record_size (Record Size of the file)
 
-    jobid = str(row[0])
-    user = str(row[1])
-    account = str(row[2])
+    jobid = str(row[JOBID])
+    user = str(row[USER])
+    account = str(row[ACCOUNT])
 
-    local_start = datetime.strptime(row[3], '%Y-%m-%dT%H:%M:%S')
+    local_start = datetime.strptime(row[START_TIME], '%Y-%m-%dT%H:%M:%S')
     local_dt_strt = local.localize(local_start, is_dst=True)
     start = local_dt_strt.astimezone(pytz.utc)
 
-    local_end = datetime.strptime(row[4], '%Y-%m-%dT%H:%M:%S')
+    local_end = datetime.strptime(row[END_TIME], '%Y-%m-%dT%H:%M:%S')
     local_dt_end = local.localize(local_end, is_dst=True)
     end = local_dt_end.astimezone(pytz.utc)
 
-    local_submit = datetime.strptime(row[5], '%Y-%m-%dT%H:%M:%S')
+    local_submit = datetime.strptime(row[SUBMIT_TIME], '%Y-%m-%dT%H:%M:%S')
     local_dt_submit = local.localize(local_submit, is_dst=True)
     submit = local_dt_submit.astimezone(pytz.utc)
 
-    queue = str(row[6])
+    queue = str(row[QUEUE_TYPE])
 
-    raw = str(row[7])  # Raw is the max_minutes column
+    raw = str(row[MAX_MINUTES])
     max_minutes = timeConversion(raw)
 
-    jobname = str(row[8])
+    jobname = str(row[JOBNAME])
 
     if record_size == QOS_RECORD_LEN:
         print("Record Size", record_size)
         deltaSteps = size - record_size # The number of extra fields
 
-        qos = str(row[size - 1]) # row[13]
-        nodelisttmp = str(row[size - 2]) # row[12]
+        qos = str(row[size - 1]) # row[QOS]
+        nodelisttmp = str(row[size - 2]) # row[NODELIST]
         nodelist = nodelisttmp.strip("\n")  # Removes \n at the end of nodelist
         reqcpus = intTryParse(row[size - 3], filename, lineno, line)
         nnodes = intTryParse(row[size - 4], filename, lineno, line)
@@ -553,7 +573,7 @@ def lineRepair(row, record_size, filename, lineno, line):
 
     elif record_size == SHORT_RECORD_LEN:
         deltaSteps = size - record_size # The number of extra fields
-        nodelisttmp = str(row[size - 1])  # row[12]
+        nodelisttmp = str(row[size - 1])  # row[NODELIST]
         nodelist = nodelisttmp.strip("\n")  # Removes \n at the end of nodelist
         reqcpus = intTryParse(row[size - 2], filename, lineno, line)
         nnodes = intTryParse(row[size - 3], filename, lineno, line)
