@@ -103,57 +103,14 @@ def query(connection, tableName, queueType, numNodes, state, max_minutes):
 
     df = pd.read_sql(query, connection)
     print(df)
-
     qTdf = df["queueTime"]
-
     summary = df["queueTime"].describe()
-    summary['var'] = summary['std']**2.0
+    summary['var'] = summary['std'] ** 2.0
     print("Queue Time Summary", summary.apply(lambda x: format(x, 'f')))
-
-    #bp1 = df.boxplot(column = "queueTime", by = "runTime", grid = False)
-    #bp2 = df.boxplot(column = "queueTime", by = "queue", grid = False)
-    #bp3 = df.boxplot(column = "nnodes", by = "reqcpus", grid = False)
-    #hist = qTdf.plot(kind = "hist", title = "Histogram of Queue Times for " + tableName)
-    #hist.set_xlabel("Queue Time(sec")
-    #hist.set_ylabel("Number of jobs")
+    graphicalAnalysis(df)
 
 
-    # Scatter plot of Queue Time with respect to Run Time
-    scatt1 = df.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to run time", x = "queueTime", y = "runTime")
-    scatt1.set_xlabel("Queue Time (min)")
-    scatt1.set_ylabel("Run Time (min)")
 
-    # Scatter plot of Queue Time with respect to the number of Nodes requested
-    scatt2 = df.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of nodes requested", x = "queueTime", y = "nnodes")
-    scatt2.set_xlabel("Queue Time (min)")
-    scatt2.set_ylabel("Number of Nodes")
-
-    # Scatter plot of Run Time with respect to the number of Nodes requested
-    scatt3 = df.plot(kind = "scatter", grid = True, title="Scatterplot of run time with respect to the number of nodes requested", x= "runTime", y="nnodes")
-    scatt3.set_xlabel("Run Time (min)")
-    scatt3.set_ylabel("Number of Nodes")
-
-    # Scatter plot of Queue Time with respect to the number of CPUs requested
-    scatt4 = df.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of CPUs requested", x = "queueTime",y = "reqcpus")
-    scatt4.set_xlabel("Queue Time (min)")
-    scatt4.set_ylabel("Number of CPUs Requested")
-
-    # Scatter plot of Run Time with respect to the number of Nodes requested
-    scatt5 = df.plot(kind = "scatter", grid = True, title = "Scatterplot of run time with respect to the number of CPUs requested", x = "runTime", y = "reqcpus")
-    scatt5.set_xlabel("Run Time (min)")
-    scatt5.set_ylabel("Number of CPUs Requested")
-
-    # Scatter plot of Queue Time with respect to the Partition requested
-    scatt6 = df.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the Partition requested", x = "queueTime",y = "queue")
-    scatt6.set_xlabel("Queue Time (min)")
-    scatt6.set_ylabel("Partition Requested")
-
-    # Scatter plot of Run Time with respect to the Partition requested
-    scatt7 = df.plot(kind = "scatter", grid = True, title = "Scatterplot of run time with respect to the Partition requested", x = "runTime", y = "queue")
-    scatt7.set_xlabel("Run Time (min)")
-    scatt7.set_ylabel("Partition Requested")
-
-    plt.show()
 def rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state, max_minutes):
     '''
     The rangeQuery() function creates a Pandas dataframe utilizing the user provided parameters to create statistical graphs. The graphs can be used to develop inferences in what is occuring in the dataset.
@@ -176,29 +133,64 @@ def rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state
 
     df = pd.read_sql(query, connection)
     print(df)
-
-'''
     qTdf = df["queueTime"]
-
     summary = df["queueTime"].describe()
-    summary['var'] = summary['std']**2.0
-    print("Queue Time Summary\n", summary.apply(lambda x: format(x, 'f')))
+    summary['var'] = summary['std'] ** 2.0
+    print("Queue Time Summary", summary.apply(lambda x: format(x, 'f')))
+    graphicalAnalysis(df)
 
-    bp1 = df.boxplot(column = "queueTime", by = "max_minutes", grid = False)
-    bp2 = df.boxplot(column = "queueTime", by = "queue", grid = False)
-    bp3 = df.boxplot(column = "nnodes", by = "reqcpus", grid = False)
+
+def graphicalAnalysis(dataframe):
+    '''
+    The function graphicalAnalysis() creates plots based on specified objects considered key for analysis from function provided dataframes, which holds the user-specified queried data.
+    :param dataframe: Pandas Dataframe object that holds the historical job data queried by the user
+    :return:
+        Returns 7 scatter plots detailing tendencies between job data points such as a jobs run time and the amount of CPU processing power requested by the job user.
+    '''
+    #bp1 = df.boxplot(column = "queueTime", by = "runTime", grid = False)
+    #bp2 = df.boxplot(column = "queueTime", by = "queue", grid = False)
+    #bp3 = df.boxplot(column = "nnodes", by = "reqcpus", grid = False)
     #hist = qTdf.plot(kind = "hist", title = "Histogram of Queue Times for " + tableName)
     #hist.set_xlabel("Queue Time(sec")
     #hist.set_ylabel("Number of jobs")
-    scatt = df.plot(kind = "scatter", grid = True, title = "Histogram of queue times with respect to max_minutes", x = "queueTime", y = "runTime")
-    scatt.set_xlabel("Queue Time(sec)")
-    scatt.set_ylabel("Run Time (sec)")
+
+
+    # Scatter plot of Queue Time with respect to Run Time
+    scatt1 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to run time", x = "queueTime", y = "runTime")
+    scatt1.set_xlabel("Queue Time (min)")
+    scatt1.set_ylabel("Run Time (min)")
+
+    # Scatter plot of Queue Time with respect to the number of Nodes requested
+    scatt2 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of nodes requested", x = "queueTime", y = "nnodes")
+    scatt2.set_xlabel("Queue Time (min)")
+    scatt2.set_ylabel("Number of Nodes")
+
+    # Scatter plot of Run Time with respect to the number of Nodes requested
+    scatt3 = dataframe.plot(kind = "scatter", grid = True, title="Scatterplot of run time with respect to the number of nodes requested", x= "runTime", y="nnodes")
+    scatt3.set_xlabel("Run Time (min)")
+    scatt3.set_ylabel("Number of Nodes")
+
+    # Scatter plot of Queue Time with respect to the number of CPUs requested
+    scatt4 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of CPUs requested", x = "queueTime",y = "reqcpus")
+    scatt4.set_xlabel("Queue Time (min)")
+    scatt4.set_ylabel("Number of CPUs Requested")
+
+    # Scatter plot of Run Time with respect to the number of Nodes requested
+    scatt5 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of run time with respect to the number of CPUs requested", x = "runTime", y = "reqcpus")
+    scatt5.set_xlabel("Run Time (min)")
+    scatt5.set_ylabel("Number of CPUs Requested")
+
+    # Scatter plot of Queue Time with respect to the Partition requested
+    scatt6 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the Partition requested", x = "queueTime",y = "queue")
+    scatt6.set_xlabel("Queue Time (min)")
+    scatt6.set_ylabel("Partition Requested")
+
+    # Scatter plot of Run Time with respect to the Partition requested
+    scatt7 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of run time with respect to the Partition requested", x = "runTime", y = "queue")
+    scatt7.set_xlabel("Run Time (min)")
+    scatt7.set_ylabel("Partition Requested")
+
     plt.show()
-'''
-    # Filtering by types of jobs (partition, max minutes, nnodes)
-    # Reqcpus
-    # Terminal - Queue and nnode (support range [min, max] or exact) for all or a specific system
-    # No need for a specified number of jobs, do above
 
 def main():
     while len(sys.argv) != 6 and len(sys.argv) != 7:
