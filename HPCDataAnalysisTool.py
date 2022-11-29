@@ -69,16 +69,91 @@ def query(connection, tableName, queueType, numNodes, state, max_minutes):
     '''
     allcase = "All"
     if tableName.casefold() == allcase.casefold():
-        query = ("SELECT tablename.jobid, tablename.user, tablename.account, TIMESTAMPDIFF(minute, tablename.submit, tablename.start) AS queueTime, TIMESTAMPDIFF(minute, tablename.start, tablename.end) AS runTime, "
-                 "tablename.queue, tablename.max_minutes, tablename.state, tablename.nnodes, tablename.reqcpus, tablename.nodelist"
-                    " FROM frontera, lonestar6, stampede, stampede2, maverick WHERE queue LIKE '" + queueType + "' AND nnodes LIKE '" + numNodes + "' AND state LIKE '" + state + "'")
+        table_queries = []
+        for table in ["frontera", "lonestar6", "stampede", "stampede2", "maverick"]:
+            table_queries.append(f"""
+                    SELECT
+            tablename.jobid,
+            tablename.user,
+            tablename.account,
+            TIMESTAMPDIFF(minute, tablename.submit, tablename.start) AS queueTime,
+            TIMESTAMPDIFF(minute, tablename.start, tablename.
+            end
+            ) AS runTime,
+            tablename.queue,
+            tablename.max_minutes,
+            tablename.state,
+            tablename.nnodes,
+            tablename.reqcpus,
+            tablename.nodelist,
+            '{table}' as computer_source 
+        FROM
+            {table} 
+        WHERE
+            queue LIKE '" + queueType + "' 
+            AND nnodes LIKE '" + numNodes + "' 
+            AND state LIKE '" + state + "'
+        """)
+
+        query = "UNION".join(table_queries)
+        query += "ORDER BY computer_source;"
     else:
         query = ("SELECT jobid, user, account, TIMESTAMPDIFF(minute, submit, start) AS queueTime, TIMESTAMPDIFF(minute, start, end) AS runTime, queue, max_minutes, state, nnodes, reqcpus, nodelist"
-            " FROM " + tableName +  " WHERE queue LIKE '" + queueType + "' AND nnodes LIKE '" + numNodes + "' AND state LIKE '" + state + "' AND max_minutes BETWEEN 1 AND " + max_minutes + "")
+            " FROM " + tableName + " WHERE queue LIKE '" + queueType + "' AND nnodes LIKE '" + numNodes + "' AND state LIKE '" + state + "' AND max_minutes BETWEEN 1 AND " + max_minutes + "")
 
     df = pd.read_sql(query, connection)
     print(df)
 
+    qTdf = df["queueTime"]
+
+    summary = df["queueTime"].describe()
+    summary['var'] = summary['std']**2.0
+    print("Queue Time Summary", summary.apply(lambda x: format(x, 'f')))
+
+    #bp1 = df.boxplot(column = "queueTime", by = "runTime", grid = False)
+    #bp2 = df.boxplot(column = "queueTime", by = "queue", grid = False)
+    #bp3 = df.boxplot(column = "nnodes", by = "reqcpus", grid = False)
+    #hist = qTdf.plot(kind = "hist", title = "Histogram of Queue Times for " + tableName)
+    #hist.set_xlabel("Queue Time(sec")
+    #hist.set_ylabel("Number of jobs")
+
+
+    # Scatter plot of Queue Time with respect to Run Time
+    scatt1 = df.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to run time", x = "queueTime", y = "runTime")
+    scatt1.set_xlabel("Queue Time (min)")
+    scatt1.set_ylabel("Run Time (min)")
+
+    # Scatter plot of Queue Time with respect to the number of Nodes requested
+    scatt2 = df.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of nodes requested", x = "queueTime", y = "nnodes")
+    scatt2.set_xlabel("Queue Time (min)")
+    scatt2.set_ylabel("Number of Nodes")
+
+    # Scatter plot of Run Time with respect to the number of Nodes requested
+    scatt3 = df.plot(kind = "scatter", grid = True, title="Scatterplot of run time with respect to the number of nodes requested", x= "runTime", y="nnodes")
+    scatt3.set_xlabel("Run Time (min)")
+    scatt3.set_ylabel("Number of Nodes")
+
+    # Scatter plot of Queue Time with respect to the number of CPUs requested
+    scatt4 = df.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of CPUs requested", x = "queueTime",y = "reqcpus")
+    scatt4.set_xlabel("Queue Time (min)")
+    scatt4.set_ylabel("Number of CPUs Requested")
+
+    # Scatter plot of Run Time with respect to the number of Nodes requested
+    scatt5 = df.plot(kind = "scatter", grid = True, title = "Scatterplot of run time with respect to the number of CPUs requested", x = "runTime", y = "reqcpus")
+    scatt5.set_xlabel("Run Time (min)")
+    scatt5.set_ylabel("Number of CPUs Requested")
+
+    # Scatter plot of Queue Time with respect to the Partition requested
+    scatt6 = df.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the Partition requested", x = "queueTime",y = "queue")
+    scatt6.set_xlabel("Queue Time (min)")
+    scatt6.set_ylabel("Partition Requested")
+
+    # Scatter plot of Run Time with respect to the Partition requested
+    scatt7 = df.plot(kind = "scatter", grid = True, title = "Scatterplot of run time with respect to the Partition requested", x = "runTime", y = "queue")
+    scatt7.set_xlabel("Run Time (min)")
+    scatt7.set_ylabel("Partition Requested")
+
+    plt.show()
 def rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state, max_minutes):
     '''
     The rangeQuery() function creates a Pandas dataframe utilizing the user provided parameters to create statistical graphs. The graphs can be used to develop inferences in what is occuring in the dataset.
@@ -96,7 +171,6 @@ def rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state
     allcase = "All"
     #if tableName.casefold() == allcase.casefold():
     #else:
-
     query = ("SELECT jobid, user, account, TIMESTAMPDIFF(minute, submit, start) AS queueTime, TIMESTAMPDIFF(minute, start, end) AS runTime, queue, max_minutes, state, nnodes, reqcpus, nodelist"
          " FROM " + tableName + " WHERE queue LIKE '" + queueType + "' AND nnodes BETWEEN " + numNodesMIN + " AND " + numNodesMAX + " AND state LIKE '" + state + "' AND max_minutes BETWEEN 1 AND " + max_minutes + "")
 
@@ -148,7 +222,7 @@ def main():
         connection = connect()
         query(connection, tableName, queueType, numNodes, state, max_minutes)
 
-    if len(sys.argv) == 6:
+    if len(sys.argv) == 7:
         # For the case where the user inputs a range for the number of nodes they would like to analyze
         tableName = sys.argv[1]
         queueType = sys.argv[2]
@@ -159,7 +233,7 @@ def main():
         connection = connect()
         rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state, max_minutes)
 
-    connection.close()
+    connection.close() # 'Engine' object has no attribute 'close'
     sys.exit(1)
 
 if __name__ == '__main__':
