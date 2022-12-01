@@ -98,18 +98,17 @@ def query(connection, tableName, queueType, numNodes, state, max_minutes):
         query = "UNION".join(table_queries)
         query += "ORDER BY computer_source;"
     else:
-        query = ("SELECT jobid, user, account, TIMESTAMPDIFF(minute, submit, start) AS queueTime, TIMESTAMPDIFF(minute, start, end) AS runTime, queue, max_minutes, state, nnodes, reqcpus, nodelist"
-            " FROM " + tableName + " WHERE queue LIKE '" + queueType + "' AND nnodes LIKE '" + numNodes + "' AND state LIKE '" + state + "' AND max_minutes BETWEEN 1 AND " + max_minutes + "")
-
+        query = ("SELECT jobid, user, account, TIMESTAMPDIFF(second, submit, start) AS queueTime, TIMESTAMPDIFF(second, start, end) AS runTime, queue, max_minutes, state, nnodes, reqcpus, nodelist"
+            " FROM " + tableName + " WHERE queue LIKE '" + queueType + "' AND nnodes =" + numNodes + " AND state LIKE '" + state + "' AND max_minutes BETWEEN 1 AND " + max_minutes + "")
+        print(query)
     df = pd.read_sql(query, connection)
+    df["queueTime"] = df["queueTime"] * 0.0166667 # Multiplies the "queueTime" column (QT) in the dataframe to convert the QT from seconds to minutes
+    df["runTime"] = df["runTime"] * 0.0166667 # Multiplies the "runTime" column (RT) in the dataframe to convert the RT from seconds to minutes
     print(df)
-    qTdf = df["queueTime"]
     summary = df["queueTime"].describe()
     summary['var'] = summary['std'] ** 2.0
-    print("Queue Time Summary", summary.apply(lambda x: format(x, 'f')))
-    graphicalAnalysis(df)
-
-
+    print("Queue Time Summary\n ", summary.apply(lambda x: format(x, 'f')))
+    #graphicalAnalysis(df)
 
 def rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state, max_minutes):
     '''
@@ -128,16 +127,36 @@ def rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state
     allcase = "All"
     #if tableName.casefold() == allcase.casefold():
     #else:
-    query = ("SELECT jobid, user, account, TIMESTAMPDIFF(minute, submit, start) AS queueTime, TIMESTAMPDIFF(minute, start, end) AS runTime, queue, max_minutes, state, nnodes, reqcpus, nodelist"
+    query = ("SELECT jobid, user, account, TIMESTAMPDIFF(second, submit, start) AS queueTime, TIMESTAMPDIFF(second, start, end) AS runTime, queue, max_minutes, state, nnodes, reqcpus, nodelist"
          " FROM " + tableName + " WHERE queue LIKE '" + queueType + "' AND nnodes BETWEEN " + numNodesMIN + " AND " + numNodesMAX + " AND state LIKE '" + state + "' AND max_minutes BETWEEN 1 AND " + max_minutes + "")
-
+    #print(query)
     df = pd.read_sql(query, connection)
+
+    df["queueTime"] = df["queueTime"] * 0.0166667 # Multiplies the "queueTime" column (QT) in the dataframe to convert the QT from seconds to minutes
+    df["runTime"] = df["runTime"] * 0.0166667 # Multiplies the "runTime" column (RT) in the dataframe to convert the RT from seconds to minutes
+
+    # This section between lines 139 and 144 finds both the minimum value and the index of the minimum value of the data frame
+    # Which I used to manually go back into SQL to find the row that produced the first negative number
     print(df)
-    qTdf = df["queueTime"]
-    summary = df["queueTime"].describe()
-    summary['var'] = summary['std'] ** 2.0
-    print("Queue Time Summary", summary.apply(lambda x: format(x, 'f')))
-    graphicalAnalysis(df)
+    s = df["queueTime"].idxmin()
+    print(s)
+    print(df.loc[[s]])
+    t = df["queueTime"].min()
+    print(t)
+
+    # This section attempts to print out all negative values in the "queueTime" pandas column. This is achieved successfully,
+    # but unsuccessfully inverts these values so they could be considered in the data set
+    print(df[df["queueTime"] < 0]) #= (df.apply(lambda x: 1/x))
+    #s = (df["queueTime"] < 0)
+    #iv = s.apply(lambda x: 1/x)
+    #print(iv)
+
+    #t = df["queueTime"].min()
+    #print(t)
+    #summary = df["queueTime"].describe()
+    #summary['var'] = summary['std'] ** 2.0
+    #print("Queue Time Summary\n", summary.apply(lambda x: format(x, 'f')))
+    #graphicalAnalysis(df)
 
 
 def graphicalAnalysis(dataframe):
