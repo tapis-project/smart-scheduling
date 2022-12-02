@@ -55,7 +55,7 @@ def connectGen():
 
     return genConnection
 
-def query(connection, tableName, queueType, numNodes, state, max_minutes):
+def query(connection, tableName, queueType, numNodes, state, max_minutes, qtRange, rtRange):
     '''
     The query() function creates a Pandas dataframe utilizing the user provided parameters to create statistical graphs. The graphs can be used to develop inferences in what is occuring in the dataset.
     :param connection: Object that holds the established SQL-Python connection to the database
@@ -104,13 +104,25 @@ def query(connection, tableName, queueType, numNodes, state, max_minutes):
     df = pd.read_sql(query, connection)
     df["queueTime"] = df["queueTime"] * 0.0166667 # Multiplies the "queueTime" column (QT) in the dataframe to convert the QT from seconds to minutes
     df["runTime"] = df["runTime"] * 0.0166667 # Multiplies the "runTime" column (RT) in the dataframe to convert the RT from seconds to minutes
-    print(df)
-    summary = df["queueTime"].describe()
-    summary['var'] = summary['std'] ** 2.0
-    print("Queue Time Summary\n ", summary.apply(lambda x: format(x, 'f')))
-    #graphicalAnalysis(df)
+    positiveQTDFtemp = df[df["queueTime"] >= 0].copy()
+    positiveRTDFtemp = df[df["runTime"] >= 0].copy()
+    correctedDF = pd.merge(positiveQTDFtemp, positiveRTDFtemp, how="inner")
 
-def rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state, max_minutes):
+    datetimeErrors = len(df.index) - len(correctedDF.index)
+    print("\nThere are a total of", datetimeErrors, "errors in the dataset, which are highlighted below:\n")
+
+    negativeQTDF = df[df["queueTime"] < 0].copy()
+    negativeRTDF = df[df["runTime"] < 0].copy()
+    print("Negative QTs Found:\n", negativeQTDF, "\n")
+    print("Negative RTs Found:\n", negativeRTDF, "\n")
+
+    summary = correctedDF["queueTime"].describe()
+    summary['var'] = summary['std'] ** 2.0
+    print("Corrected Queue Time Summary")
+    print(summary.apply(lambda x: format(x, 'f')))
+    graphicalAnalysis(correctedDF)
+
+def rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state, max_minutes, qtRange, rtRange):
     '''
     The rangeQuery() function creates a Pandas dataframe utilizing the user provided parameters to create statistical graphs. The graphs can be used to develop inferences in what is occuring in the dataset.
     This function differs from query() because it allows the user to input a range of nodes to query.
@@ -124,12 +136,15 @@ def rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state
     :return:
         Returns a specified Pandas dataframe, as well as corresponding graphs
     '''
+    QTrange = int(qtRange)
+    RTrange = int(rtRange)
+
     allcase = "All"
     #if tableName.casefold() == allcase.casefold():
     #else:
     query = ("SELECT jobid, user, account, TIMESTAMPDIFF(second, submit, start) AS queueTime, TIMESTAMPDIFF(second, start, end) AS runTime, queue, max_minutes, state, nnodes, reqcpus, nodelist"
-         " FROM " + tableName + " WHERE queue LIKE '" + queueType + "' AND nnodes BETWEEN " + numNodesMIN + " AND " + numNodesMAX + " AND state LIKE '" + state + "' AND max_minutes BETWEEN 1 AND " + max_minutes + "")
-    #print(query)
+         " FROM " + tableName + " WHERE queue = '" + queueType + "' AND nnodes BETWEEN " + numNodesMIN + " AND " + numNodesMAX + " AND state = '" + state + "' AND max_minutes BETWEEN 1 AND " + max_minutes + "")
+    print(query)
     df = pd.read_sql(query, connection)
 
     df["queueTime"] = df["queueTime"] * 0.0166667 # Multiplies the "queueTime" column (QT) in the dataframe to convert the QT from seconds to minutes
@@ -137,27 +152,58 @@ def rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state
 
     # This section between lines 139 and 144 finds both the minimum value and the index of the minimum value of the data frame
     # Which I used to manually go back into SQL to find the row that produced the first negative number
-    print(df)
-    s = df["queueTime"].idxmin()
-    print(s)
-    print(df.loc[[s]])
-    t = df["queueTime"].min()
-    print(t)
+    #print("Original", df)
+    #s = df["queueTime"].idxmin()
+    #print(s)
+    #print(df.loc[[s]])
+    #i = df["queueTime"].min()
+    #print("queuetime min for orig", i)
+    #l = df["runTime"].min()
+    #print("runtime min for orig", l)
 
-    # This section attempts to print out all negative values in the "queueTime" pandas column. This is achieved successfully,
-    # but unsuccessfully inverts these values so they could be considered in the data set
-    print(df[df["queueTime"] < 0]) #= (df.apply(lambda x: 1/x))
-    #s = (df["queueTime"] < 0)
-    #iv = s.apply(lambda x: 1/x)
-    #print(iv)
 
-    #t = df["queueTime"].min()
-    #print(t)
-    #summary = df["queueTime"].describe()
-    #summary['var'] = summary['std'] ** 2.0
-    #print("Queue Time Summary\n", summary.apply(lambda x: format(x, 'f')))
-    #graphicalAnalysis(df)
+    # The objective is to 1) make a copy of the main dataframe where the QT or the RT is < 0, remove those elements that make up those copies from the main DF and then graph each case
 
+    positiveQTDFtemp = df[df["queueTime"] >= 0].copy()
+    positiveRTDFtemp = df[df["runTime"] >= 0].copy()
+    correctedDF = pd.merge(positiveQTDFtemp, positiveRTDFtemp, how = "inner" )
+    print(correctedDF)
+    #print("Corrected\n", correctedDF) # check to see that it truly was corrected
+    #t = correctedDF["queueTime"].min()
+    #print("queuetime min", t)
+    #p = correctedDF["runTime"].min()
+    #print("runtime min", p)
+
+    datetimeErrors = len(df.index) - len(correctedDF.index)
+    print("\nThere are a total of", datetimeErrors, "errors in the dataset, which are highlighted below:\n")
+
+    negativeQTDF = df[df["queueTime"] < 0].copy()
+    negativeRTDF = df[df["runTime"] < 0].copy()
+    print("Negative QTs Found:\n", negativeQTDF, "\n")
+    print("Negative RTs Found:\n", negativeRTDF, "\n")
+
+    '''
+        result = df["queueTime"].describe()
+        result['var'] = result['std'] ** 2.0
+        print("Original Queue Time Summary")
+        print(result.apply(lambda x: format(x, 'f')))
+    
+    
+    '''
+
+    summary = correctedDF["queueTime"].describe()
+    summary['var'] = summary['std'] ** 2.0
+    summary['median'] = correctedDF["queueTime"].median()
+    print("Corrected Queue Time Summary")
+    print(summary.apply(lambda x: format(x, 'f')))
+
+    longQT = correctedDF[(correctedDF["queueTime"] >= QTrange) & (correctedDF["runTime"] <= RTrange)].copy()
+    longQTsum = longQT["queueTime"].describe()
+    longQTsum['var'] = longQTsum['std'] ** 2.0
+    print("Adjusted Queue Time Summary for the queue bounds of " + qtRange + " and run bounds of " + rtRange)
+    print(longQTsum.apply(lambda x: format(x, 'f')))
+    #graphicalAnalysis(correctedDF)
+    graphicalAnalysis(longQT)
 
 def graphicalAnalysis(dataframe):
     '''
@@ -212,28 +258,30 @@ def graphicalAnalysis(dataframe):
     plt.show()
 
 def main():
-    while len(sys.argv) != 6 and len(sys.argv) != 7:
+    while len(sys.argv) != 8 and len(sys.argv) != 9:
         try:
 
-            print("Please enter the correct amount of command-line arguments (5/6) in their respective order: "
-                  "\npython3 HPCDataAnalysisTool.py [Table Name/All] [Queue Type] [Nnodes - Exact or Range] [State] [Max_Minutes]")
+            print("Please enter the correct amount of command-line arguments (7/8) in their respective order: "
+                  "\npython3 HPCDataAnalysisTool.py [Table Name/All] [Queue Type] [Nnodes - Exact or Range] [State] [Max_Minutes] [Queue time range to be observed] [Run time range to be observed]")
             sys.exit(1)
         except ValueError:
             print(
-                "Incorrect number of arguments submitted, please make sure to enter the correct amount of command-line arguments (5/6) in their respective order: "
-                "\npython3 HPCDataAnalysisTool.py [Table Name/All] [Queue Type] [Nnodes - Exact or Range] [State] [Max_Minutes]")
+                "Incorrect number of arguments submitted, please make sure to enter the correct amount of command-line arguments (7/8) in their respective order: "
+                "\npython3 HPCDataAnalysisTool.py [Table Name/All] [Queue Type] [Nnodes - Exact or Range] [State] [Max_Minutes] [Queue time range to be observed] [Run time range to be observed]")
 
-    if len(sys.argv) == 6:
+    if len(sys.argv) == 8:
         # For the case where the user inputs the exact number of nodes they would like to analyze rather than a range
         tableName = sys.argv[1]
         queueType = sys.argv[2]
         numNodes = sys.argv[3]
         state = sys.argv[4]
         max_minutes = sys.argv[5]
+        qtRange = sys.argv[6]
+        rtRange = sys.argv[7]
         connection = connect()
-        query(connection, tableName, queueType, numNodes, state, max_minutes)
+        query(connection, tableName, queueType, numNodes, state, max_minutes, qtRange, rtRange)
 
-    if len(sys.argv) == 7:
+    if len(sys.argv) == 9:
         # For the case where the user inputs a range for the number of nodes they would like to analyze
         tableName = sys.argv[1]
         queueType = sys.argv[2]
@@ -241,10 +289,12 @@ def main():
         numNodesMAX = sys.argv[4]
         state = sys.argv[5]
         max_minutes = sys.argv[6]
+        qtRange = sys.argv[7]
+        rtRange = sys.argv[8]
         connection = connect()
-        rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state, max_minutes)
+        rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state, max_minutes, qtRange, rtRange)
 
-    connection.close() # 'Engine' object has no attribute 'close'
+    #connection.close() # 'Engine' object has no attribute 'close'
     sys.exit(1)
 
 if __name__ == '__main__':
