@@ -17,8 +17,8 @@ import numpy as np
 # please read the README.md in the Github repository this script was found.
 my_host = "localhost"  # The host variable that the MySQL Database is created on (IE. IP address or local network)
 my_user = "root"  # Connection instance username that has the ability to create and modify tables, indexes and databases
-my_passwd = "password"  # Password for the user with the access mentioned on the line above
-my_database = "HPC_Job_Time_Data"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
+my_passwd = "l0v31Zth#7890"  # Password for the user with the access mentioned on the line above
+my_database = "HPC_Job_Database"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
 # **************************************************************
 
 
@@ -68,6 +68,7 @@ def query(connection, tableName, queueType, numNodes, state, max_minutes, qtRang
         Returns a specified Pandas dataframe, as well as corresponding graphs.
     '''
     allcase = "All"
+    '''
     if tableName.casefold() == allcase.casefold():
         table_queries = []
         for table in ["frontera", "lonestar6", "stampede", "stampede2", "maverick"]:
@@ -98,9 +99,10 @@ def query(connection, tableName, queueType, numNodes, state, max_minutes, qtRang
         query = "UNION".join(table_queries)
         query += "ORDER BY computer_source;"
     else:
-        query = ("SELECT jobid, user, account, TIMESTAMPDIFF(second, submit, start) AS queueTime, TIMESTAMPDIFF(second, start, end) AS runTime, queue, max_minutes, state, nnodes, reqcpus, nodelist"
-            " FROM " + tableName + " WHERE queue LIKE '" + queueType + "' AND nnodes =" + numNodes + " AND state LIKE '" + state + "' AND max_minutes BETWEEN 1 AND " + max_minutes + "")
-        print(query)
+    '''
+    query = ("SELECT jobid, user, account, TIMESTAMPDIFF(second, submit, start) AS queueTime, TIMESTAMPDIFF(second, start, end) AS runTime, queue, max_minutes, state, nnodes, reqcpus, nodelist"
+        " FROM " + tableName + " WHERE queue = '" + queueType + "' AND nnodes =" + numNodes + " AND state = '" + state + "' AND max_minutes BETWEEN 1 AND " + max_minutes + "")
+    print(query)
     df = pd.read_sql(query, connection)
     df["queueTime"] = df["queueTime"] * 0.0166667 # Multiplies the "queueTime" column (QT) in the dataframe to convert the QT from seconds to minutes
     df["runTime"] = df["runTime"] * 0.0166667 # Multiplies the "runTime" column (RT) in the dataframe to convert the RT from seconds to minutes
@@ -191,19 +193,31 @@ def rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state
     
     '''
 
-    summary = correctedDF["queueTime"].describe()
-    summary['var'] = summary['std'] ** 2.0
-    summary['median'] = correctedDF["queueTime"].median()
-    print("Corrected Queue Time Summary")
-    print(summary.apply(lambda x: format(x, 'f')))
+    timelimitSummary = correctedDF["max_minutes"].describe()
+    timelimitSummary['var'] = timelimitSummary['std'] ** 2.0
+    timelimitSummary['median'] = correctedDF["queueTime"].median()
+    print("Requested Max Time Limit Summary")
+    print(timelimitSummary.apply(lambda x: format(x, 'f')))
 
+    queueSummary = correctedDF["queueTime"].describe()
+    queueSummary['var'] = queueSummary['std'] ** 2.0
+    queueSummary['median'] = correctedDF["queueTime"].median()
+    print("\nQueue Time Summary")
+    print(queueSummary.apply(lambda x: format(x, 'f')))
+
+    graphicalAnalysis(correctedDF)
+
+    '''
     longQT = correctedDF[(correctedDF["queueTime"] >= QTrange) & (correctedDF["runTime"] <= RTrange)].copy()
-    longQTsum = longQT["queueTime"].describe()
-    longQTsum['var'] = longQTsum['std'] ** 2.0
-    print("Adjusted Queue Time Summary for the queue bounds of " + qtRange + " and run bounds of " + rtRange)
-    print(longQTsum.apply(lambda x: format(x, 'f')))
-    #graphicalAnalysis(correctedDF)
-    graphicalAnalysis(longQT)
+        longQTsum = longQT["queueTime"].describe()
+        longQTsum['var'] = longQTsum['std'] ** 2.0
+        print("Adjusted Queue Time Summary for the queue bounds of " + qtRange + " and run bounds of " + rtRange)
+        print(longQTsum.apply(lambda x: format(x, 'f')))
+        #graphicalAnalysis(correctedDF)
+        graphicalAnalysis(longQT)
+    
+    '''
+
 
 def graphicalAnalysis(dataframe):
     '''
@@ -219,57 +233,46 @@ def graphicalAnalysis(dataframe):
     #hist.set_xlabel("Queue Time(sec")
     #hist.set_ylabel("Number of jobs")
 
+    # Scatter plot of Time Limit requested to number of Nodes requested
+    scatt1 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of maximum job run time limit requested with respect to number of Nodes requested", x = "max_minutes", y = "nnodes")
+    scatt1.set_xlabel("Time Limit/Max_minutes Requested (min)")
+    scatt1.set_ylabel("Number of Nodes Requested")
 
-    # Scatter plot of Queue Time with respect to Run Time
-    scatt1 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to run time", x = "queueTime", y = "runTime")
-    scatt1.set_xlabel("Queue Time (min)")
-    scatt1.set_ylabel("Run Time (min)")
+    # Scatter plot of Time Limit requested with respect to the number of CPUs requested
+    scatt2 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of maximum job run time limit requested with respect to the number of CPUs requested", x = "max_minutes", y = "reqcpus")
+    scatt2.set_xlabel("Time Limit/Max_minutes Requested (min)")
+    scatt2.set_ylabel("Number of CPUs Requested")
+
+    # Scatter plot of Queue Time with respect to Time Limit requested
+    scatt3 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to maximum job run time limit requested", x = "max_minutes", y = "queueTime")
+    scatt3.set_xlabel("Time Limit/Max_minutes Requested (min)")
+    scatt3.set_ylabel("Queue Time (min)")
 
     # Scatter plot of Queue Time with respect to the number of Nodes requested
-    scatt2 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of nodes requested", x = "queueTime", y = "nnodes")
-    scatt2.set_xlabel("Queue Time (min)")
-    scatt2.set_ylabel("Number of Nodes")
-
-    # Scatter plot of Run Time with respect to the number of Nodes requested
-    scatt3 = dataframe.plot(kind = "scatter", grid = True, title="Scatterplot of run time with respect to the number of nodes requested", x= "runTime", y="nnodes")
-    scatt3.set_xlabel("Run Time (min)")
-    scatt3.set_ylabel("Number of Nodes")
+    scatt4 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of nodes requested", x = "nnodes", y = "queueTime")
+    scatt4.set_xlabel("Number of Nodes Requested")
+    scatt4.set_ylabel("Queue Time (min)")
 
     # Scatter plot of Queue Time with respect to the number of CPUs requested
-    scatt4 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of CPUs requested", x = "queueTime",y = "reqcpus")
-    scatt4.set_xlabel("Queue Time (min)")
-    scatt4.set_ylabel("Number of CPUs Requested")
-
-    # Scatter plot of Run Time with respect to the number of Nodes requested
-    scatt5 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of run time with respect to the number of CPUs requested", x = "runTime", y = "reqcpus")
-    scatt5.set_xlabel("Run Time (min)")
-    scatt5.set_ylabel("Number of CPUs Requested")
-
-    # Scatter plot of Queue Time with respect to the Partition requested
-    scatt6 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the Partition requested", x = "queueTime",y = "queue")
-    scatt6.set_xlabel("Queue Time (min)")
-    scatt6.set_ylabel("Partition Requested")
-
-    # Scatter plot of Run Time with respect to the Partition requested
-    scatt7 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of run time with respect to the Partition requested", x = "runTime", y = "queue")
-    scatt7.set_xlabel("Run Time (min)")
-    scatt7.set_ylabel("Partition Requested")
+    scatt5 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of CPUs requested", x = "reqcpus", y = "queueTime")
+    scatt5.set_xlabel("Number of CPUs Requested")
+    scatt5.set_ylabel("Queue Time (min)")
 
     plt.show()
 
 def main():
-    while len(sys.argv) != 8 and len(sys.argv) != 9:
+    while len(sys.argv) != 7 and len(sys.argv) != 8:
         try:
 
             print("Please enter the correct amount of command-line arguments (7/8) in their respective order: "
-                  "\npython3 HPCDataAnalysisTool.py [Table Name/All] [Queue Type] [Nnodes - Exact or Range] [State] [Max_Minutes] [Queue time range to be observed] [Run time range to be observed]")
+                  "\npython3 HPCDataAnalysisTool.py [Table Name/All] [Queue Type] [Nnodes - Exact or Range] [State] [Max_Minutes] [Queue time range to be observed]")
             sys.exit(1)
         except ValueError:
             print(
                 "Incorrect number of arguments submitted, please make sure to enter the correct amount of command-line arguments (7/8) in their respective order: "
-                "\npython3 HPCDataAnalysisTool.py [Table Name/All] [Queue Type] [Nnodes - Exact or Range] [State] [Max_Minutes] [Queue time range to be observed] [Run time range to be observed]")
+                "\npython3 HPCDataAnalysisTool.py [Table Name/All] [Queue Type] [Nnodes - Exact or Range] [State] [Max_Minutes] [Queue time range to be observed]")
 
-    if len(sys.argv) == 8:
+    if len(sys.argv) == 7:
         # For the case where the user inputs the exact number of nodes they would like to analyze rather than a range
         tableName = sys.argv[1]
         queueType = sys.argv[2]
@@ -277,11 +280,10 @@ def main():
         state = sys.argv[4]
         max_minutes = sys.argv[5]
         qtRange = sys.argv[6]
-        rtRange = sys.argv[7]
         connection = connect()
-        query(connection, tableName, queueType, numNodes, state, max_minutes, qtRange, rtRange)
+        query(connection, tableName, queueType, numNodes, state, max_minutes, qtRange)
 
-    if len(sys.argv) == 9:
+    if len(sys.argv) == 8:
         # For the case where the user inputs a range for the number of nodes they would like to analyze
         tableName = sys.argv[1]
         queueType = sys.argv[2]
@@ -290,9 +292,8 @@ def main():
         state = sys.argv[5]
         max_minutes = sys.argv[6]
         qtRange = sys.argv[7]
-        rtRange = sys.argv[8]
         connection = connect()
-        rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state, max_minutes, qtRange, rtRange)
+        rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state, max_minutes, qtRange)
 
     #connection.close() # 'Engine' object has no attribute 'close'
     sys.exit(1)

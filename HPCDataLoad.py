@@ -343,8 +343,7 @@ def injection(connection, tableName):
             total_files_skipped += 1
             print("\nERROR: File: ", filename, " is inaccessible, cannot be read due to chmod permission code ",
                   permissionCode, ", skipping file")  # Error handling - lacking read permission access to file
-            writeError(
-                errorStatement=f"\nERROR: File {filename} is inaccessible, cannot be read due to chmod permission code {permissionCode}, skipping file\n")
+            writeError(errorStatement=f"\nERROR: File {filename} is inaccessible, cannot be read due to chmod permission code {permissionCode}, skipping file\n")
             continue
 
         badFirstLnResult = detectBadFirstln(filename)
