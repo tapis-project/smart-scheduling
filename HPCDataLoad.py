@@ -458,7 +458,7 @@ def injection(connection, tableName):
             connection.commit()
         except ValueError:
             print("\nVALUE ERROR: Program exited due to a error of one the datapoints on line", lineno, "in file", filename, "\n", line, "\nSkipping line")
-            writeError(errorStatement=f"VALUE ERROR: Program threw out line due to a error of one the datapoints on line {lineno} in file {filename}\n{line}\nSkipping line")
+            writeError(errorStatement=f"\nVALUE ERROR: Program threw out line due to a error of one the datapoints on line {lineno} in file {filename}\n{line}\nSkipping line")
             continue
             #sys.exit(1)
 
