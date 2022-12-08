@@ -529,6 +529,8 @@ def lineRepair(row, record_size, filename, lineno, line):
     that value to the expected number of columns the current file that is being read in specifies. The difference between these two values is taken to account, and as such the function iterates x amount of times until
     the difference is met, combining the extra column(s) data into one unified object, and adds it to the jobname column (with "?" marks included to note that these new additions were not how the data was originally).
     An error is written to the errorlog.txt file documenting this effort to notify the user to correct their dataset, and inserts this corrected row to the dataset.
+    :return:
+
     '''
     global QOS_RECORD_LEN
     global SHORT_RECORD_LEN
@@ -600,12 +602,14 @@ def lineRepair(row, record_size, filename, lineno, line):
 
 def insertRepair(repairResult, cursor, tableName):
     '''
-
-    :param repairResult:
-    :param cursor:
-    :param connection:
-    :return:
+    The repairResult() function takes the repairResult tuple object, breaks it up into its representative objects necessary to be inserted into
+    the SQL database, and inserts it into the database.
+    :param repairResult: Tuple object that holds the return result from the lineRepair() function
+    :param cursor: Object that holds the cursor capability to run commands in MySQL Workbench with the mysql-python connector library package
+    :param connection: Object that holds the basic connection between this script and the MySQL HPC Job Database
+    :return: bool, returns True to indicate the insertion was successfully made
     '''
+
     jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist, qos = repairResult
     add_data = ("INSERT IGNORE INTO " + tableName +
                             "(jobid, user, account, start, end, submit, queue, max_minutes, jobname, state, nnodes, reqcpus, nodelist, qos) "
@@ -655,11 +659,10 @@ def intTryParse(value, filename, lineno, line):
             repairtmp = "".join([a for a in value if a.isdigit()])
             repair = repairtmp * 1000  # Many of the instances have been a value of K, representing 1000, as such multiplying
             print("\nNnode value was successfully repaired")
-            writeError(
-                errorStatement=f"ERROR: Integer conversion in file {filename} on line {lineno}\n{line}\nValue was repaired")
+            writeError(errorStatement=f"ERROR: Integer conversion in file {filename} on line {lineno}\n{line}Value was repaired sucessfully\n")
             return repair
         else:
-            writeError(errorStatement=f"ERROR: Integer conversion in file {filename} on line {lineno}\n{line}\n")
+            writeError(errorStatement=f"ERROR: Integer conversion in file {filename} on line {lineno}\n{line}Value was unsucessfully repaired\n")
             return 0
 
 
