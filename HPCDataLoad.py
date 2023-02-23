@@ -20,7 +20,7 @@ import linecache
 
 
 my_host = "localhost"  # The host variable that the MySQL Database is created on (IE. IP address or local network)
-my_user = "root"  # Connection instance username that has the ability to create and modify tables, indexes and databases
+my_user = "costaki"  # Connection instance username that has the ability to create and modify tables, indexes and databases
 my_passwd = "l0v31Zth#7890"  # Password for the user with the access mentioned on the line above
 my_database = "HPC_Job_Database"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
 my_parent_dir = "/home/ubuntu/jobs_data/"  # The parent directory of the HPC-specific input directories that host the submitted job data that will be inserted into the MySQL table
@@ -152,8 +152,6 @@ def createTable(connection, tableName):
         # ALl permissions granted, no warning message or message in general outputted to the user, no need for conditional statements
         dbspec = my_database + '.' + tableName
 
-        cursor.execute('CREATE INDEX index_jobid ON ' + dbspec + '(jobid)')
-        cursor.execute('CREATE INDEX index_user ON ' + dbspec + '(user)')
         cursor.execute('CREATE INDEX index_account ON ' + dbspec + '(account)')
 
         cursor.execute('CREATE INDEX index_submit ON ' + dbspec + '(submit)')
@@ -419,7 +417,7 @@ def injection(connection, tableName):
                 account = str(row[ACCOUNT])
 
                 # Conversion to UTC for start, end and submit column variables
-                local_start = datetime.strptime(row[SUBMIT_TIME], '%Y-%m-%dT%H:%M:%S')
+                local_start = datetime.strptime(row[START_TIME], '%Y-%m-%dT%H:%M:%S')
                 local_dt_strt = local.localize(local_start, is_dst=True)
                 start = local_dt_strt.astimezone(pytz.utc)
 
