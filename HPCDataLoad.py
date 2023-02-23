@@ -152,7 +152,6 @@ def createTable(connection, tableName):
         # ALl permissions granted, no warning message or message in general outputted to the user, no need for conditional statements
         dbspec = my_database + '.' + tableName
 
-        cursor.execute('CREATE INDEX index_user ON ' + dbspec + '(user)')
         cursor.execute('CREATE INDEX index_account ON ' + dbspec + '(account)')
 
         cursor.execute('CREATE INDEX index_submit ON ' + dbspec + '(submit)')
