@@ -20,8 +20,8 @@ import linecache
 
 
 my_host = "localhost"  # The host variable that the MySQL Database is created on (IE. IP address or local network)
-my_user = "costaki"  # Connection instance username that has the ability to create and modify tables, indexes and databases
-my_passwd = "l0v31Zth#7890"  # Password for the user with the access mentioned on the line above
+my_user = "user"  # Connection instance username that has the ability to create and modify tables, indexes and databases
+my_passwd = "password"  # Password for the user with the access mentioned on the line above
 my_database = "HPC_Job_Database"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
 my_parent_dir = "/home/ubuntu/jobs_data/"  # The parent directory of the HPC-specific input directories that host the submitted job data that will be inserted into the MySQL table
 partition_limit = 2880  # Default time limit for max job runtimes in TACC HPC systems - 2880 Minutes or 2 Days
@@ -152,8 +152,8 @@ def createTable(connection, tableName):
         # ALl permissions granted, no warning message or message in general outputted to the user, no need for conditional statements
         dbspec = my_database + '.' + tableName
 
+        cursor.execute('CREATE INDEX index_user ON ' + dbspec + '(user)')
         cursor.execute('CREATE INDEX index_account ON ' + dbspec + '(account)')
-
         cursor.execute('CREATE INDEX index_submit ON ' + dbspec + '(submit)')
         cursor.execute('CREATE INDEX index_start ON ' + dbspec + '(start)')
         cursor.execute('CREATE INDEX index_end ON ' + dbspec + '(end)')
@@ -197,6 +197,7 @@ def timeConversion(raw):
 
     '''
     dash_position = raw.find('-')
+
     if (dash_position == 1):
         found = []
         if re.search('\:', raw) is not None:
@@ -266,6 +267,24 @@ def timeConversion(raw):
                 max_minutes = partition_limit
             else:
                 max_minutes = int(raw)
+    elif (dash_position == 2):
+        found = []
+        if re.search('\:', raw) is not None:
+            for i in re.finditer('\:', raw):
+                found.append(i.start(0))
+        if len(found) == 2:
+            # (DD-H:M:S) Format
+            temp = re.split('[-]', raw)
+            day = (int(temp[0]) * 1440)  # The amount of minutes in a day
+
+            temp1 = temp[1]
+            hms = re.split('[:]', temp1)
+
+            h = int(hms[0]) * 60
+            m = int(hms[1])
+            s = int(hms[2]) * 0.0166667
+
+            max_minutes = day + h + m + s
 
     return max_minutes
 
@@ -413,6 +432,7 @@ def injection(connection, tableName):
                 queue = str(row[QUEUE_TYPE])
 
                 raw = str(row[MAX_MINUTES])
+
                 max_minutes = timeConversion(raw)
 
                 jobname = str(row[JOBNAME])
