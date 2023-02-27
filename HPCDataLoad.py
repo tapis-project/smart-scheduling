@@ -20,8 +20,8 @@ import linecache
 
 
 my_host = "localhost"  # The host variable that the MySQL Database is created on (IE. IP address or local network)
-my_user = "user"  # Connection instance username that has the ability to create and modify tables, indexes and databases
-my_passwd = "password"  # Password for the user with the access mentioned on the line above
+my_user = "costaki"  # Connection instance username that has the ability to create and modify tables, indexes and databases
+my_passwd = "am_)jRsFjPo9ZL0"  # Password for the user with the access mentioned on the line above
 my_database = "HPC_Job_Database"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
 my_parent_dir = "/home/ubuntu/jobs_data/"  # The parent directory of the HPC-specific input directories that host the submitted job data that will be inserted into the MySQL table
 partition_limit = 2880  # Default time limit for max job runtimes in TACC HPC systems - 2880 Minutes or 2 Days
@@ -429,6 +429,24 @@ def injection(connection, tableName):
                 local_dt_submit = local.localize(local_submit, is_dst=True)
                 submit = local_dt_submit.astimezone(pytz.utc)
 
+                # If statements to handle bad job submit, start, and end times 
+                # Meaning that a job's submit, start, and end times potentially don't logically make sense, such as a job ending before it even starting
+                
+                if submit > start: # If the job submit time is > job start time, job is now considered bad data, as such the job is not being written to the database
+                    print("ERROR: Record on line", lineno, "in file", filename, "has a submit time greater than start time. Job data is now identified as faulty, skipping line")
+                    writeError(errorStatement=f"ERROR: Record on line {lineno} in file {filename} has a submit time greater than start time. Job is now identified as faulty, skipping line")
+                    continue # Skip line 
+                    
+                if start > end: # Skip line if the job's start time is greater than it's end time 
+                    print("ERROR: Record on line", lineno, "in file", filename, "has a start time greater than it's end time. Job data is now identified as faulty, skipping line")
+                    writeError(errorStatement=f"ERROR: Record on line {lineno} in file {filename} has a start time greater it's than end time. Job data is now identified as faulty, skipping line")
+                    continue  # Skip line 
+                    
+                if submit > end: # Skip line if the job's submit time is greater than it's end time
+                    print("ERROR: Record on line", lineno, "in file", filename, "has a submit time greater than it's end time. Job data is now identified as faulty, skipping line")
+                    writeError(errorStatement=f"ERROR: Record on line {lineno} in file {filename} has a submit time greater it's than end time. Job data is now identified as faulty, skipping line")
+                    continue  # Skip line 
+
                 queue = str(row[QUEUE_TYPE])
 
                 raw = str(row[MAX_MINUTES])
@@ -492,6 +510,7 @@ def injection(connection, tableName):
 
     end = datetime.now()
     print('\nEnd: ', end)
+    print("Script run time: ", start - end)
 
 
 def detectBadFirstln(filename):
