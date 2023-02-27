@@ -434,17 +434,17 @@ def injection(connection, tableName):
                 
                 if submit > start: # If the job submit time is > job start time, job is now considered bad data, as such the job is not being written to the database
                     print("ERROR: Record on line", lineno, "in file", filename, "has a submit time greater than start time. Job data is now identified as faulty, skipping line")
-                    writeError(errorStatement=f"ERROR: Record on line {lineno} in file {filename} has a submit time greater than start time. Job is now identified as faulty, skipping line")
+                    writeError(errorStatement=f"\nERROR: Record on line {lineno} in file {filename} has a submit time greater than start time. Job is now identified as faulty, skipping line")
                     continue # Skip line 
                     
                 if start > end: # Skip line if the job's start time is greater than it's end time 
                     print("ERROR: Record on line", lineno, "in file", filename, "has a start time greater than it's end time. Job data is now identified as faulty, skipping line")
-                    writeError(errorStatement=f"ERROR: Record on line {lineno} in file {filename} has a start time greater it's than end time. Job data is now identified as faulty, skipping line")
+                    writeError(errorStatement=f"\nERROR: Record on line {lineno} in file {filename} has a start time greater it's than end time. Job data is now identified as faulty, skipping line")
                     continue  # Skip line 
                     
                 if submit > end: # Skip line if the job's submit time is greater than it's end time
                     print("ERROR: Record on line", lineno, "in file", filename, "has a submit time greater than it's end time. Job data is now identified as faulty, skipping line")
-                    writeError(errorStatement=f"ERROR: Record on line {lineno} in file {filename} has a submit time greater it's than end time. Job data is now identified as faulty, skipping line")
+                    writeError(errorStatement=f"\nERROR: Record on line {lineno} in file {filename} has a submit time greater it's than end time. Job data is now identified as faulty, skipping line")
                     continue  # Skip line 
 
                 queue = str(row[QUEUE_TYPE])
