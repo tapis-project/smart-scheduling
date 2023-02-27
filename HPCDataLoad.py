@@ -510,7 +510,8 @@ def injection(connection, tableName):
 
     end = datetime.now()
     print('\nEnd: ', end)
-    #print("Script run time: ", start - end)
+    runTime = end - start
+    print("\nScript run time: ", runTime, "\n")
 
 
 def detectBadFirstln(filename):
