@@ -542,13 +542,13 @@ def detectBadFirstln(filename):
             total_errors += 1
             total_field_errors += 1
             firstlineno = 1
-            writeError(errorStatement=f"ERROR: Line {firstlineno} in file {filename} has {record_size} fields, which is not supported due to missing information, skipping line\n{firstline}\n")
+            writeError(errorStatement=f"\nERROR: Line {firstlineno} in file {filename} has {record_size} fields, which is not supported due to missing information, skipping line\n{firstline}\n")
             secondline = linecache.getline(filename, 2)
             record_size2 = len(secondline.split("|"))
             if record_size2 not in [SHORT_RECORD_LEN, QOS_RECORD_LEN]:
                 total_files_skipped += 1
                 print("\nERROR: Records with", record_size2, "fields are not supported, skipping file", filename)  # Error handling if the fields in the data are not currently supported by table
-                writeError(errorStatement=f"ERROR: Records with {record_size2} fields are not supported, skipping file {filename}\n")
+                writeError(errorStatement=f"\nERROR: Records with {record_size2} fields are not supported, skipping file {filename}\n")
                 return True
             else:
                 record_size = record_size2
@@ -697,10 +697,10 @@ def intTryParse(value, filename, lineno, line):
             repairtmp = "".join([a for a in value if a.isdigit()])
             repair = repairtmp * 1000  # Many of the instances have been a value of K, representing 1000, as such multiplying
             print("\nNnode value was successfully repaired")
-            writeError(errorStatement=f"ERROR: Integer conversion in file {filename} on line {lineno}\n{line}Value was repaired sucessfully\n")
+            writeError(errorStatement=f"\nERROR: Integer conversion in file {filename} on line {lineno}\n{line}Value was repaired sucessfully\n")
             return repair
         else:
-            writeError(errorStatement=f"ERROR: Integer conversion in file {filename} on line {lineno}\n{line}Value was unsucessfully repaired\n")
+            writeError(errorStatement=f"\nERROR: Integer conversion in file {filename} on line {lineno}\n{line}Value was unsucessfully repaired\n")
             return 0
 
 
