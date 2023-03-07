@@ -20,8 +20,8 @@ import linecache
 
 
 my_host = "localhost"  # The host variable that the MySQL Database is created on (IE. IP address or local network)
-my_user = "user"  # Connection instance username that has the ability to create and modify tables, indexes and databases
-my_passwd = "password"  # Password for the user with the access mentioned on the line above
+my_user = "costaki"  # Connection instance username that has the ability to create and modify tables, indexes and databases
+my_passwd = "am_)jRsFjPo9ZL0"  # Password for the user with the access mentioned on the line above
 my_database = "HPC_Job_Database"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
 my_parent_dir = "/home/ubuntu/jobs_data/"  # The parent directory of the HPC-specific input directories that host the submitted job data that will be inserted into the MySQL table
 partition_limit = 2880  # Default time limit for max job runtimes in TACC HPC systems - 2880 Minutes or 2 Days
@@ -428,6 +428,24 @@ def injection(connection, tableName):
                 local_dt_submit = local.localize(local_submit, is_dst=True)
                 submit = local_dt_submit.astimezone(pytz.utc)
 
+                # If statements to handle bad job submit, start, and end times 
+                # Meaning that a job's submit, start, and end times potentially don't logically make sense, such as a job ending before it even starting
+                
+                if submit > start: # If the job submit time is > job start time, job is now considered bad data, as such the job is not being written to the database
+                    print("\nERROR: Record on line", lineno, "in file", filename, "has a submit time greater than start time. Job data is now identified as faulty, skipping line")
+                    writeError(errorStatement=f"\nERROR: Record on line {lineno} in file {filename} has a submit time greater than start time. Job is now identified as faulty, skipping line")
+                    continue # Skip line 
+                    
+                if start > end: # Skip line if the job's start time is greater than it's end time 
+                    print("\nERROR: Record on line", lineno, "in file", filename, "has a start time greater than it's end time. Job data is now identified as faulty, skipping line")
+                    writeError(errorStatement=f"\nERROR: Record on line {lineno} in file {filename} has a start time greater it's than end time. Job data is now identified as faulty, skipping line")
+                    continue  # Skip line 
+                    
+                if submit > end: # Skip line if the job's submit time is greater than it's end time
+                    print("\nERROR: Record on line", lineno, "in file", filename, "has a submit time greater than it's end time. Job data is now identified as faulty, skipping line")
+                    writeError(errorStatement=f"\nERROR: Record on line {lineno} in file {filename} has a submit time greater it's than end time. Job data is now identified as faulty, skipping line")
+                    continue  # Skip line 
+
                 queue = str(row[QUEUE_TYPE])
 
                 raw = str(row[MAX_MINUTES])
@@ -491,7 +509,9 @@ def injection(connection, tableName):
 
     end = datetime.now()
     print('\nEnd: ', end)
-
+    runTime = end - start.replace(tzinfo=None)
+    print("\nScript run time: ", runTime, "\n")
+    writeError(errorStatement=f"\nScript ran for {runTime}")
 
 def detectBadFirstln(filename):
     '''
@@ -521,13 +541,13 @@ def detectBadFirstln(filename):
             total_errors += 1
             total_field_errors += 1
             firstlineno = 1
-            writeError(errorStatement=f"ERROR: Line {firstlineno} in file {filename} has {record_size} fields, which is not supported due to missing information, skipping line\n{firstline}\n")
+            writeError(errorStatement=f"\nERROR: Line {firstlineno} in file {filename} has {record_size} fields, which is not supported due to missing information, skipping line\n{firstline}\n")
             secondline = linecache.getline(filename, 2)
             record_size2 = len(secondline.split("|"))
             if record_size2 not in [SHORT_RECORD_LEN, QOS_RECORD_LEN]:
                 total_files_skipped += 1
                 print("\nERROR: Records with", record_size2, "fields are not supported, skipping file", filename)  # Error handling if the fields in the data are not currently supported by table
-                writeError(errorStatement=f"ERROR: Records with {record_size2} fields are not supported, skipping file {filename}\n")
+                writeError(errorStatement=f"\nERROR: Records with {record_size2} fields are not supported, skipping file {filename}\n")
                 return True
             else:
                 record_size = record_size2
@@ -676,10 +696,10 @@ def intTryParse(value, filename, lineno, line):
             repairtmp = "".join([a for a in value if a.isdigit()])
             repair = repairtmp * 1000  # Many of the instances have been a value of K, representing 1000, as such multiplying
             print("\nNnode value was successfully repaired")
-            writeError(errorStatement=f"ERROR: Integer conversion in file {filename} on line {lineno}\n{line}Value was repaired sucessfully\n")
+            writeError(errorStatement=f"\nERROR: Integer conversion in file {filename} on line {lineno}\n{line}Value was repaired sucessfully\n")
             return repair
         else:
-            writeError(errorStatement=f"ERROR: Integer conversion in file {filename} on line {lineno}\n{line}Value was unsucessfully repaired\n")
+            writeError(errorStatement=f"\nERROR: Integer conversion in file {filename} on line {lineno}\n{line}Value was unsucessfully repaired\n")
             return 0
 
 
