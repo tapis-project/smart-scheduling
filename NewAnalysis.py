@@ -3,6 +3,7 @@ import sys
 import pandas as pd
 import sqlalchemy as sa
 import mysql.connector
+import statistics
 import matplotlib.pyplot as plt
 
 from mpl_toolkits.mplot3d import axes3d
@@ -111,38 +112,47 @@ def query(connection, mainConnection, tableName):
     QUEUE_MINUTESMAX = 90116
 
     # "Knobs" for the query adjustment
-    loop_step_size = 3 # Knobs for for-loop range() function
-    start_bound_ForLoop = 7
+    loop_step_size = 10 # Knobs for for-loop range() function
+    start_bound_ForLoop = 10
     end_bound_ForLoop = BACKLOG_NUM_JOBSMAX
-    
-    STRTMAXMIN = "0" 
-    ENDMAXMIN = "120"
-    
-    STRTBKLGMIN = "0"
-    ENDBKLGMIN = "120"
-    
-    STRTBKLGNUMJOBS = "0"
-    ENDBKLGNUMJOBS = "120"
 
-    STRTQUEUEMIN = "0"
-    ENDQUEUEMIN = "120"
+    STRTMAXMIN = 360
+    ENDMAXMIN = STRTMAXMIN * 1.05
 
-    with open('IncreasingMaxMinTimesandJobTimes.txt', "w") as f:
+    STRTBKLGMIN = 0
+    ENDBKLGMIN = BACKLOG_MINUTESMAX
+
+    STRTBKLGNUMJOBS = 10
+    ENDBKLGNUMJOBS = STRTBKLGNUMJOBS + 10
+
+    STRTQUEUEMIN = 0
+    ENDQUEUEMIN = QUEUE_MINUTESMAX
+
+    zeroJobCounts = 0
+    std_percentage_list = []
+
+
+    with open('360_Startfor_max_minRequested_increaseby10_percent.txt', "w") as f:
         for i in range(start_bound_ForLoop, end_bound_ForLoop, loop_step_size):
             query = "SELECT COUNT(max_minutes) AS TotalJobs," \
-                          "AVG(max_minutes) AS AverageMaxMinutesRequestedPerJob," \
-                          "AVG(queue_minutes) AS AverageQueueMinutesEachJobExperienced," \
-                          "AVG(backlog_minutes) AS AverageBacklogMinutes," \
-                          "AVG(backlog_num_jobs) AS AverageNumberOfBacklogJobs," \
-                          "stddev_samp(max_minutes) AS STDFORAverageMaxMinutesRequestedPerJob," \
-                          "stddev_samp(queue_minutes) AS STDFORAverageQueueMinutesEachJobExperienced," \
-                          "stddev_samp(backlog_minutes) AS STDFORAverageBacklogMinutes," \
-                          "stddev_samp(backlog_num_jobs) AS STDFORAverageNumberOfBacklogJobs" \
-                          " FROM HPC_Job_Database.stampede2_jobq" \
-                          " WHERE max_minutes BETWEEN " + STRTMAXMIN + " AND " + ENDMAXMIN + \
-                          " AND backlog_minutes BETWEEN " + STRTBKLGMIN + " AND " + ENDBKLGMIN + \
-                          " AND backlog_num_jobs BETWEEN " + STRTBKLGNUMJOBS + " AND " + ENDBKLGNUMJOBS + \
-                          " AND queue_minutes BETWEEN " + STRTQUEUEMIN + " AND " + ENDQUEUEMIN + ";"
+                    "AVG(max_minutes) AS AverageMaxMinutesRequestedPerJob," \
+                    "AVG(queue_minutes) AS AverageQueueMinutesEachJobExperienced," \
+                    "AVG(backlog_minutes) AS AverageBacklogMinutes," \
+                    "AVG(backlog_num_jobs) AS AverageNumberOfBacklogJobs," \
+                    "stddev_samp(max_minutes) AS STDFORAverageMaxMinutesRequestedPerJob," \
+                    "stddev_samp(queue_minutes) AS STDFORAverageQueueMinutesEachJobExperienced," \
+                    "stddev_samp(backlog_minutes) AS STDFORAverageBacklogMinutes," \
+                    "stddev_samp(backlog_num_jobs) AS STDFORAverageNumberOfBacklogJobs" \
+                    " FROM HPC_Job_Database.stampede2_jobq" \
+                    " WHERE max_minutes BETWEEN " + str(STRTMAXMIN) + " AND " + str(ENDMAXMIN) + \
+                    " AND backlog_minutes BETWEEN " + str(STRTBKLGMIN) + " AND " + str(ENDBKLGMIN) + \
+                    " AND backlog_num_jobs BETWEEN " + str(STRTBKLGNUMJOBS) + " AND " + str(ENDBKLGNUMJOBS) + \
+                    " AND queue_minutes BETWEEN " + str(STRTQUEUEMIN) + " AND " + str(ENDQUEUEMIN) + ";"
+
+            current_where_clause = " WHERE max_minutes BETWEEN " + str(STRTMAXMIN) + " AND " + str(ENDMAXMIN) + \
+                    " AND backlog_minutes BETWEEN " + str(STRTBKLGMIN) + " AND " + str(ENDBKLGMIN) + \
+                    " AND backlog_num_jobs BETWEEN " + str(STRTBKLGNUMJOBS) + " AND " + str(ENDBKLGNUMJOBS) + \
+                    " AND queue_minutes BETWEEN " + str(STRTQUEUEMIN) + " AND " + str(ENDQUEUEMIN) + ";"
 
             # str(i) + " AND " + str(i + loop_step_size)
             df_tmp = pd.read_sql(query, connection)
@@ -173,7 +183,7 @@ def query(connection, mainConnection, tableName):
             std_for_average_backlog_minutes_list.append(std_for_average_backlog_minutes)
             std_for_average_number_of_backlog_jobs_list.append(std_for_average_number_of_backlog_jobs)
 
-            print("Current WHERE CLAUSE: " + str(i) + " AND " + str(i + 60))
+            print("\nCurrent WHERE CLAUSE -> " + current_where_clause)
 
             print("Total Number of Jobs: ", total_jobs)
 
@@ -187,36 +197,64 @@ def query(connection, mainConnection, tableName):
             print("Mean Backlog Number of Jobs standard deviation", std_for_average_backlog_minutes)
             print("Mean Backlog Minutes Requested standard deviation", std_for_average_backlog_minutes)
 
-            # If the mean queue time experienced is within 25% of the mean requested max_minutes value, check for potential gain
-            if (average_queue_minutes - average_max_minutes) / average_max_minutes <= 0.25:
-                print("Found Potential For Gain at AND statement -> " + str(i) + " AND " + str(i + 60))
-                f.write("Found Potential For Gain at AND statement -> " + str(i) + " AND " + str(i + 60))
-                f.write("Total Number of Jobs: " + str(total_jobs) + "\n")
 
-                f.write("Mean max_minutes: " + str(average_max_minutes) + "\n")
-                f.write("Mean queue_minutes: " + str(average_queue_minutes) + "\n")
-                f.write("Mean Backlog Number of Jobs: " + str(average_number_of_backlog_jobs) + "\n")
-                f.write("Mean Backlog Minutes: " + str(average_backlog_minutes) + "\n")
+            if len(total_jobs_list) >= 3 and total_jobs_list[-3:] == [0, 0, 0]:
+                f.close()
+                with open('360_Startfor_max_minRequested_increaseby10_percent.txt', "r") as f:
+                    lines = f.readlines()
+                f.close()
 
-                f.write("Mean max_minutes standard deviation: " + str(std_for_average_max_minutes) + "\n")
-                f.write("Mean queue_minutes standard deviation: " + str(std_for_average_queue_minutes) + "\n")
-                f.write("Mean Backlog Number of Jobs standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
-                f.write("Mean Backlog Minutes Requested standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
+                with open('360_Startfor_max_minRequested_increaseby10_percent.txt', "w") as f:
+                    f.writelines(lines[:-42])
+                    std_percentage_list_without_last3 = std_percentage_list[:-3]
+                    mean_std_percentage_without_last3 = statistics.mean(std_percentage_list_without_last3)
+                    f.write("\n\nMean Standard Deviation Percentage: " + str(mean_std_percentage_without_last3))
+                    f.write("\nMaximum STD value: " + str(max(std_percentage_list_without_last3)))
+                    f.write("\nMinimum STD value: " + str(min(std_percentage_list_without_last3)))
+                f.close()
+                break
+
+            # If the mean queue time experienced is within 50% of the mean requested max_minutes value, check for potential gain
+            if average_queue_minutes > 0:
+                queue_percentage = (average_queue_minutes - average_max_minutes) / average_max_minutes
+                print("Queue percentage, IE it calculates how much the average queue time exceeds the average max time", queue_percentage)
+
+                std_percentage = abs(std_for_average_queue_minutes / average_queue_minutes) * 100
+                std_percentage_list.append(std_percentage)
+
+                if std_percentage <= 0.50:
+                    print("\nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
+                    f.write("\nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
+                else:
+                    print("\nThe std_for_average_queue_minutes is not within +/- 50% of the average_queue_minutes -> " + str(std_percentage))
+                    f.write("\nThe std_for_average_queue_minutes IS NOT within +/- 50% of the average_queue_minutes -> " + str(std_percentage))
 
             # Write the print statements to the file
-            f.write("WHERE CLAUSE: " + str(i) + " AND " + str(i + 60) + "\n")
-            f.write("Total Number of Jobs: " +  str(total_jobs) + "\n")
+            f.write("\n\nWHERE CLAUSE -> " + current_where_clause + "\n")
+            f.write("Total Number of Jobs: " + str(total_jobs) + "\n")
 
-            f.write("Mean max_minutes: " + str(average_max_minutes) + "\n")
+            f.write("\nMEANS DATA:\nMean max_minutes: " + str(average_max_minutes) + "\n")
             f.write("Mean queue_minutes: " + str(average_queue_minutes) + "\n")
             f.write("Mean Backlog Number of Jobs: " + str(average_number_of_backlog_jobs) + "\n")
             f.write("Mean Backlog Minutes: " + str(average_backlog_minutes) + "\n")
 
-            f.write("Mean max_minutes standard deviation: " + str(std_for_average_max_minutes) + "\n")
+            f.write("\nSTANDARD DEVIATION DATA:\nMean max_minutes standard deviation: " + str(std_for_average_max_minutes) + "\n")
             f.write("Mean queue_minutes standard deviation: " + str(std_for_average_queue_minutes) + "\n")
             f.write("Mean Backlog Number of Jobs standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
             f.write("Mean Backlog Minutes Requested standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
 
+
+            f.write("\nQueue Percentage, IE it calculates how much the average queue time exceeds the average max time: " + str(queue_percentage) + "\n\n--------------------------------------------\n")
+
+            # Increase values for the next iteration
+            STRTMAXMIN = ENDMAXMIN
+            ENDMAXMIN = STRTMAXMIN * 1.05
+            STRTBKLGNUMJOBS = ENDBKLGNUMJOBS
+            ENDBKLGNUMJOBS = STRTBKLGNUMJOBS + 10
+
+            if ENDMAXMIN >= MAX_MINUTESMAX:
+                print("\nRan out of requested max_minutes")
+                break
 
 def main():
     while len(sys.argv) != 2:
