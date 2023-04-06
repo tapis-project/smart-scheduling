@@ -119,21 +119,25 @@ def query(connection, mainConnection, tableName):
     STRTMAXMIN = 360
     ENDMAXMIN = STRTMAXMIN * 1.05
 
-    STRTBKLGMIN = 0
+    STRTBKLGMIN = 1
     ENDBKLGMIN = BACKLOG_MINUTESMAX
 
     STRTBKLGNUMJOBS = 10
     ENDBKLGNUMJOBS = STRTBKLGNUMJOBS + 10
 
-    STRTQUEUEMIN = 0
+    STRTQUEUEMIN = 1
     ENDQUEUEMIN = QUEUE_MINUTESMAX
 
-    zeroJobCounts = 0
     std_percentage_list = []
 
 
     with open('360_Startfor_max_minRequested_increaseby5_percent_50PercentBounds.txt', "w") as f:
         for i in range(start_bound_ForLoop, end_bound_ForLoop, loop_step_size):
+            current_where_clause = " WHERE max_minutes BETWEEN " + str(STRTMAXMIN) + " AND " + str(ENDMAXMIN) + \
+                                   " AND backlog_minutes BETWEEN " + str(STRTBKLGMIN) + " AND " + str(ENDBKLGMIN) + \
+                                   " AND backlog_num_jobs BETWEEN " + str(STRTBKLGNUMJOBS) + " AND " + str(ENDBKLGNUMJOBS) + \
+                                   " AND queue_minutes BETWEEN " + str(STRTQUEUEMIN) + " AND " + str(ENDQUEUEMIN) + ";"
+
             query = "SELECT COUNT(max_minutes) AS TotalJobs," \
                     "AVG(max_minutes) AS AverageMaxMinutesRequestedPerJob," \
                     "AVG(queue_minutes) AS AverageQueueMinutesEachJobExperienced," \
@@ -143,16 +147,7 @@ def query(connection, mainConnection, tableName):
                     "stddev_samp(queue_minutes) AS STDFORAverageQueueMinutesEachJobExperienced," \
                     "stddev_samp(backlog_minutes) AS STDFORAverageBacklogMinutes," \
                     "stddev_samp(backlog_num_jobs) AS STDFORAverageNumberOfBacklogJobs" \
-                    " FROM HPC_Job_Database.stampede2_jobq" \
-                    " WHERE max_minutes BETWEEN " + str(STRTMAXMIN) + " AND " + str(ENDMAXMIN) + \
-                    " AND backlog_minutes BETWEEN " + str(STRTBKLGMIN) + " AND " + str(ENDBKLGMIN) + \
-                    " AND backlog_num_jobs BETWEEN " + str(STRTBKLGNUMJOBS) + " AND " + str(ENDBKLGNUMJOBS) + \
-                    " AND queue_minutes BETWEEN " + str(STRTQUEUEMIN) + " AND " + str(ENDQUEUEMIN) + ";"
-
-            current_where_clause = " WHERE max_minutes BETWEEN " + str(STRTMAXMIN) + " AND " + str(ENDMAXMIN) + \
-                    " AND backlog_minutes BETWEEN " + str(STRTBKLGMIN) + " AND " + str(ENDBKLGMIN) + \
-                    " AND backlog_num_jobs BETWEEN " + str(STRTBKLGNUMJOBS) + " AND " + str(ENDBKLGNUMJOBS) + \
-                    " AND queue_minutes BETWEEN " + str(STRTQUEUEMIN) + " AND " + str(ENDQUEUEMIN) + ";"
+                    " FROM HPC_Job_Database.stampede2_jobq" + current_where_clause
 
             # str(i) + " AND " + str(i + loop_step_size)
             df_tmp = pd.read_sql(query, connection)
@@ -164,6 +159,11 @@ def query(connection, mainConnection, tableName):
             # Method not full proof, needs to be handled better to skip AND statements where that occurs
 
             total_jobs = float(df["TotalJobs"])
+
+            if total_jobs == 0.0:
+                print("\nNo jobs in this query, skipping...")
+                continue
+
             average_max_minutes = float(df["AverageMaxMinutesRequestedPerJob"]) # Mean Max_Minutes Requested for the query
             average_queue_minutes = float(df["AverageQueueMinutesEachJobExperienced"]) # Mean Queue Minutes Experienced for the query
             average_backlog_minutes = float(df["AverageBacklogMinutes"]) # Mean Backlog Minutes Experienced for the query
@@ -198,42 +198,20 @@ def query(connection, mainConnection, tableName):
             print("Mean Backlog Minutes Requested standard deviation", std_for_average_backlog_minutes)
 
 
-            if len(total_jobs_list) >= 3 and total_jobs_list[-3:] == [0, 0, 0]:
-                f.close()
-                with open('360_Startfor_max_minRequested_increaseby5_percent_50PercentBounds.txt', "r") as f:
-                    lines = f.readlines()
-                f.close()
-
-                with open('360_Startfor_max_minRequested_increaseby5_percent_50PercentBounds.txt', "w") as f:
-                    f.writelines(lines[:-42])
-                    std_percentage_list_without_last3 = std_percentage_list[:-3]
-                    mean_std_percentage_without_last3 = statistics.mean(std_percentage_list_without_last3)
-                    f.write("\n\nMean Standard Deviation Percentage: " + str(mean_std_percentage_without_last3))
-                    f.write("\nMaximum STD value: " + str(max(std_percentage_list_without_last3)))
-                    f.write("\nMinimum STD value: " + str(min(std_percentage_list_without_last3)))
-                    f.write("\nSTD values for run: \n")
-
-                    std_percentage_list_without_last3_sorted = sorted(std_percentage_list_without_last3)
-
-                    for value in std_percentage_list_without_last3_sorted:
-                        f.write(f'{value}\n')
-                f.close()
-                break
-
             # If the mean queue time experienced is within 50% of the mean requested max_minutes value, check for potential gain
             if average_queue_minutes > 0:
-                queue_percentage = (average_queue_minutes - average_max_minutes) / average_max_minutes
-                print("Queue percentage, IE it calculates how much the average queue time exceeds the average max time", queue_percentage)
+                #queue_percentage = (average_queue_minutes - average_max_minutes) / average_max_minutes # <- most likely not important, cut out
+                #print("Queue percentage, IE it calculates how much the average queue time exceeds the average max time", queue_percentage)
 
                 std_percentage = abs(std_for_average_queue_minutes / average_queue_minutes) * 100
                 std_percentage_list.append(std_percentage)
 
-                if std_percentage <= 0.50:
+                if std_percentage <= 50.0:
                     print("\nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
-                    f.write("\nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
+                    f.write("\n\nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
                 else:
                     print("\nThe std_for_average_queue_minutes is not within +/- 50% of the average_queue_minutes -> " + str(std_percentage))
-                    f.write("\nThe std_for_average_queue_minutes IS NOT within +/- 50% of the average_queue_minutes -> " + str(std_percentage))
+                    f.write("\n\nThe std_for_average_queue_minutes IS NOT within +/- 50% of the average_queue_minutes -> " + str(std_percentage))
 
             # Write the print statements to the file
             f.write("\n\nWHERE CLAUSE -> \n" + current_where_clause + "\n")
@@ -247,10 +225,10 @@ def query(connection, mainConnection, tableName):
             f.write("\nSTANDARD DEVIATION DATA:\nMean max_minutes standard deviation: " + str(std_for_average_max_minutes) + "\n")
             f.write("Mean queue_minutes standard deviation: " + str(std_for_average_queue_minutes) + "\n")
             f.write("Mean Backlog Number of Jobs standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
-            f.write("Mean Backlog Minutes Requested standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
+            f.write("Mean Backlog Minutes Requested standard deviation: " + str(std_for_average_backlog_minutes) + "\n--------------------------------------------")
 
 
-            f.write("\nQueue Percentage, IE it calculates how much the average queue time exceeds the average max time: " + str(queue_percentage) + "\n\n--------------------------------------------\n")
+            #f.write("\nQueue Percentage, IE it calculates how much the average queue time exceeds the average max time: " + str(queue_percentage) + "\n\n--------------------------------------------\n")
 
             # Increase values for the next iteration
             STRTMAXMIN = ENDMAXMIN
@@ -261,6 +239,19 @@ def query(connection, mainConnection, tableName):
             if ENDMAXMIN >= MAX_MINUTESMAX:
                 print("\nRan out of requested max_minutes")
                 break
+
+        mean_std_percentage = statistics.mean(std_percentage_list)
+        f.write("\n\nMean Standard Deviation Percentage: " + str(mean_std_percentage))
+        f.write("\nMaximum STD value: " + str(max(std_percentage_list)))
+        f.write("\nMinimum STD value: " + str(min(std_percentage_list)))
+        f.write("\nSTD values for run: \n")
+
+        std_percentage_list_sorted = sorted(std_percentage_list)
+
+        for value in std_percentage_list_sorted:
+            f.write(f'{value}\n')
+
+        f.close
 
 def main():
     while len(sys.argv) != 2:
