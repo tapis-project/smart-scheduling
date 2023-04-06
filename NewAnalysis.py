@@ -101,8 +101,6 @@ def query(connection, mainConnection, tableName):
     std_for_average_queue_minutes_list = []
     std_for_average_backlog_minutes_list = []
     std_for_average_number_of_backlog_jobs_list = []
-    queueMin_MaxMinutesMean = []
-    queueMin_MaxMinutesStanDev = []
 
     
     # Max column values in the stampede2_jobq dataset 
@@ -113,9 +111,9 @@ def query(connection, mainConnection, tableName):
     QUEUE_MINUTESMAX = 90116
 
     # "Knobs" for the query adjustment
-    loop_step_size = 60 # Knobs for for-loop range() function 
-    start_bound_ForLoop = 0
-    end_bound_ForLoop = MAX_MINUTESMAX
+    loop_step_size = 3 # Knobs for for-loop range() function
+    start_bound_ForLoop = 7
+    end_bound_ForLoop = BACKLOG_NUM_JOBSMAX
     
     STRTMAXMIN = "0" 
     ENDMAXMIN = "120"
@@ -129,17 +127,17 @@ def query(connection, mainConnection, tableName):
     STRTQUEUEMIN = "0"
     ENDQUEUEMIN = "120"
 
-    with open('Max Minutes Data Analysis.txt', "w") as f:
+    with open('IncreasingMaxMinTimesandJobTimes.txt', "w") as f:
         for i in range(start_bound_ForLoop, end_bound_ForLoop, loop_step_size):
-            maxMinquery = "SELECT COUNT(max_minutes) AS TotalJobs," \
+            query = "SELECT COUNT(max_minutes) AS TotalJobs," \
                           "AVG(max_minutes) AS AverageMaxMinutesRequestedPerJob," \
                           "AVG(queue_minutes) AS AverageQueueMinutesEachJobExperienced," \
                           "AVG(backlog_minutes) AS AverageBacklogMinutes," \
                           "AVG(backlog_num_jobs) AS AverageNumberOfBacklogJobs," \
-                          "STD(max_minutes) AS STDFORAverageMaxMinutesRequestedPerJob," \
-                          "STD(queue_minutes) AS STDFORAverageQueueMinutesEachJobExperienced," \
-                          "STD(backlog_minutes) AS STDFORAverageBacklogMinutes," \
-                          "STD(backlog_num_jobs) AS STDFORAverageNumberOfBacklogJobs" \
+                          "stddev_samp(max_minutes) AS STDFORAverageMaxMinutesRequestedPerJob," \
+                          "stddev_samp(queue_minutes) AS STDFORAverageQueueMinutesEachJobExperienced," \
+                          "stddev_samp(backlog_minutes) AS STDFORAverageBacklogMinutes," \
+                          "stddev_samp(backlog_num_jobs) AS STDFORAverageNumberOfBacklogJobs" \
                           " FROM HPC_Job_Database.stampede2_jobq" \
                           " WHERE max_minutes BETWEEN " + STRTMAXMIN + " AND " + ENDMAXMIN + \
                           " AND backlog_minutes BETWEEN " + STRTBKLGMIN + " AND " + ENDBKLGMIN + \
@@ -147,19 +145,19 @@ def query(connection, mainConnection, tableName):
                           " AND queue_minutes BETWEEN " + STRTQUEUEMIN + " AND " + ENDQUEUEMIN + ";"
 
             # str(i) + " AND " + str(i + loop_step_size)
-            df_tmp = pd.read_sql(maxMinquery, connection)
+            df_tmp = pd.read_sql(query, connection)
 
-            #print("query", maxMinquery)
+            #print("query", query)
             #print("\n",df)
 
             df = df_tmp.fillna(0) # Handles cases where the dataframe returns "NoneType" values because there is no data that is returned and as such replaces all those values with 0
             # Method not full proof, needs to be handled better to skip AND statements where that occurs
 
             total_jobs = float(df["TotalJobs"])
-            average_max_minutes = float(df["AverageMaxMinutesRequestedPerJob"])
-            average_queue_minutes = float(df["AverageQueueMinutesEachJobExperienced"])
-            average_backlog_minutes = float(df["AverageBacklogMinutes"])
-            average_number_of_backlog_jobs = float(df["AverageNumberOfBacklogJobs"])
+            average_max_minutes = float(df["AverageMaxMinutesRequestedPerJob"]) # Mean Max_Minutes Requested for the query
+            average_queue_minutes = float(df["AverageQueueMinutesEachJobExperienced"]) # Mean Queue Minutes Experienced for the query
+            average_backlog_minutes = float(df["AverageBacklogMinutes"]) # Mean Backlog Minutes Experienced for the query
+            average_number_of_backlog_jobs = float(df["AverageNumberOfBacklogJobs"]) # Mean Backlog Number of Jobs Experienced for the query
             std_for_average_max_minutes = float(df["STDFORAverageMaxMinutesRequestedPerJob"])
             std_for_average_queue_minutes = float(df["STDFORAverageQueueMinutesEachJobExperienced"])
             std_for_average_backlog_minutes = float(df["STDFORAverageBacklogMinutes"])
@@ -175,51 +173,49 @@ def query(connection, mainConnection, tableName):
             std_for_average_backlog_minutes_list.append(std_for_average_backlog_minutes)
             std_for_average_number_of_backlog_jobs_list.append(std_for_average_number_of_backlog_jobs)
 
-            queueMin_MaxMinutesMean.append((average_max_minutes + average_queue_minutes) / 2)
-            queueMin_MaxMinutesStanDev.append(np.std([average_max_minutes, average_queue_minutes]))
-
-            percentGain = [100 * (queueMin_MaxMinutesStanDev[i] / queueMin_MaxMinutesMean[i]) for i in
-                           range(len(queueMin_MaxMinutesMean))]
-
-            # print the last element of queueMin_MaxMinutesMean
             print("Current WHERE CLAUSE: " + str(i) + " AND " + str(i + 60))
 
-            #print("Total Number of Jobs: ", total_jobs)
+            print("Total Number of Jobs: ", total_jobs)
 
-            #print("Current value of average max_minutes:", average_max_minutes)
+            print("Mean max_minutes:", average_max_minutes)
+            print("Mean queue_minutes:", average_queue_minutes)
+            print("Mean Backlog Number of Jobs:", average_number_of_backlog_jobs)
+            print("Mean Backlog Minutes:", average_backlog_minutes)
 
-            # print the last element of queueMin_MaxMinutesMean
-            #print("Current value of average queue_minutes:", average_queue_minutes)
+            print("Mean max_minutes standard deviation:", std_for_average_max_minutes)
+            print("Mean queue_minutes standard deviation", std_for_average_queue_minutes)
+            print("Mean Backlog Number of Jobs standard deviation", std_for_average_backlog_minutes)
+            print("Mean Backlog Minutes Requested standard deviation", std_for_average_backlog_minutes)
 
-            #print("Mean between average_max_minutes and average_queue_minutes:", queueMin_MaxMinutesMean[-1])
-
-            #print("Standard Deviation between average_max_minutes and average_queue_minutes:", queueMin_MaxMinutesStanDev[-1])
-
-            #print("Percent Gain", percentGain[-1], "\n")
-
-            if average_queue_minutes > average_max_minutes:
+            # If the mean queue time experienced is within 25% of the mean requested max_minutes value, check for potential gain
+            if (average_queue_minutes - average_max_minutes) / average_max_minutes <= 0.25:
                 print("Found Potential For Gain at AND statement -> " + str(i) + " AND " + str(i + 60))
                 f.write("Found Potential For Gain at AND statement -> " + str(i) + " AND " + str(i + 60))
-                f.write("Total Number of Jobs: " +  str(total_jobs) + "\n")
-                f.write("Current WHERE CLAUSE: " + str(i) + " AND " + str(i + 60) + "\n")
-                f.write("Current value of average max_minutes: " + str(average_max_minutes) + "\n")
-                f.write("Current value of average queue_minutes: " + str(average_queue_minutes) + "\n")
-                f.write("Mean between average_max_minutes and average_queue_minutes: " + str(
-                    queueMin_MaxMinutesMean[-1]) + "\n")
-                f.write("Standard Deviation between average_max_minutes and average_queue_minutes: " + str(
-                    queueMin_MaxMinutesStanDev[-1]) + "\n")
-                f.write("Percent Gain: " + str(percentGain[-1]) + "\n\n")
+                f.write("Total Number of Jobs: " + str(total_jobs) + "\n")
 
-                # Write the print statements to the file
-            f.write("Current WHERE CLAUSE: " + str(i) + " AND " + str(i + 60) + "\n")
+                f.write("Mean max_minutes: " + str(average_max_minutes) + "\n")
+                f.write("Mean queue_minutes: " + str(average_queue_minutes) + "\n")
+                f.write("Mean Backlog Number of Jobs: " + str(average_number_of_backlog_jobs) + "\n")
+                f.write("Mean Backlog Minutes: " + str(average_backlog_minutes) + "\n")
+
+                f.write("Mean max_minutes standard deviation: " + str(std_for_average_max_minutes) + "\n")
+                f.write("Mean queue_minutes standard deviation: " + str(std_for_average_queue_minutes) + "\n")
+                f.write("Mean Backlog Number of Jobs standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
+                f.write("Mean Backlog Minutes Requested standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
+
+            # Write the print statements to the file
+            f.write("WHERE CLAUSE: " + str(i) + " AND " + str(i + 60) + "\n")
             f.write("Total Number of Jobs: " +  str(total_jobs) + "\n")
-            f.write("Current value of average max_minutes: " + str(average_max_minutes) + "\n")
-            f.write("Current value of average queue_minutes: " + str(average_queue_minutes) + "\n")
-            f.write("Mean between average_max_minutes and average_queue_minutes: " + str(
-                queueMin_MaxMinutesMean[-1]) + "\n")
-            f.write("Standard Deviation between average_max_minutes and average_queue_minutes: " + str(
-                queueMin_MaxMinutesStanDev[-1]) + "\n")
-            f.write("Percent Gain: " + str(percentGain[-1]) + "\n\n")
+
+            f.write("Mean max_minutes: " + str(average_max_minutes) + "\n")
+            f.write("Mean queue_minutes: " + str(average_queue_minutes) + "\n")
+            f.write("Mean Backlog Number of Jobs: " + str(average_number_of_backlog_jobs) + "\n")
+            f.write("Mean Backlog Minutes: " + str(average_backlog_minutes) + "\n")
+
+            f.write("Mean max_minutes standard deviation: " + str(std_for_average_max_minutes) + "\n")
+            f.write("Mean queue_minutes standard deviation: " + str(std_for_average_queue_minutes) + "\n")
+            f.write("Mean Backlog Number of Jobs standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
+            f.write("Mean Backlog Minutes Requested standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
 
 
 def main():
