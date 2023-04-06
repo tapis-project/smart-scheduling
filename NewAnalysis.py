@@ -132,7 +132,7 @@ def query(connection, mainConnection, tableName):
     std_percentage_list = []
 
 
-    with open('360_Startfor_max_minRequested_increaseby10_percent.txt', "w") as f:
+    with open('360_Startfor_max_minRequested_increaseby5_percent_50PercentBounds.txt', "w") as f:
         for i in range(start_bound_ForLoop, end_bound_ForLoop, loop_step_size):
             query = "SELECT COUNT(max_minutes) AS TotalJobs," \
                     "AVG(max_minutes) AS AverageMaxMinutesRequestedPerJob," \
@@ -200,17 +200,23 @@ def query(connection, mainConnection, tableName):
 
             if len(total_jobs_list) >= 3 and total_jobs_list[-3:] == [0, 0, 0]:
                 f.close()
-                with open('360_Startfor_max_minRequested_increaseby10_percent.txt', "r") as f:
+                with open('360_Startfor_max_minRequested_increaseby5_percent_50PercentBounds.txt', "r") as f:
                     lines = f.readlines()
                 f.close()
 
-                with open('360_Startfor_max_minRequested_increaseby10_percent.txt', "w") as f:
+                with open('360_Startfor_max_minRequested_increaseby5_percent_50PercentBounds.txt', "w") as f:
                     f.writelines(lines[:-42])
                     std_percentage_list_without_last3 = std_percentage_list[:-3]
                     mean_std_percentage_without_last3 = statistics.mean(std_percentage_list_without_last3)
                     f.write("\n\nMean Standard Deviation Percentage: " + str(mean_std_percentage_without_last3))
                     f.write("\nMaximum STD value: " + str(max(std_percentage_list_without_last3)))
                     f.write("\nMinimum STD value: " + str(min(std_percentage_list_without_last3)))
+                    f.write("\nSTD values for run: \n")
+
+                    std_percentage_list_without_last3_sorted = sorted(std_percentage_list_without_last3)
+
+                    for value in std_percentage_list_without_last3_sorted:
+                        f.write(f'{value}\n')
                 f.close()
                 break
 
@@ -230,7 +236,7 @@ def query(connection, mainConnection, tableName):
                     f.write("\nThe std_for_average_queue_minutes IS NOT within +/- 50% of the average_queue_minutes -> " + str(std_percentage))
 
             # Write the print statements to the file
-            f.write("\n\nWHERE CLAUSE -> " + current_where_clause + "\n")
+            f.write("\n\nWHERE CLAUSE -> \n" + current_where_clause + "\n")
             f.write("Total Number of Jobs: " + str(total_jobs) + "\n")
 
             f.write("\nMEANS DATA:\nMean max_minutes: " + str(average_max_minutes) + "\n")
