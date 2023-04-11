@@ -21,7 +21,7 @@ from datetime import timedelta, datetime
 # please read the README.md in the Github repository this script was found.
 my_host = "localhost"  # The host variable that the MySQL Database is created on (IE. IP address or local network)
 my_user = "costaki"  # Connection instance username that has the ability to create and modify tables, indexes and databases
-my_passwd = "am_)jRsFjPo9ZL0"  # Password for the user with the access mentioned on the line above
+my_passwd = "password"  # Password for the user with the access mentioned on the line above
 my_database = "HPC_Job_Database"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
 # **************************************************************
 
@@ -115,23 +115,28 @@ def query(connection, mainConnection, tableName):
     loop_step_size = 10 # Knobs for for-loop range() function
     start_bound_ForLoop = 10
     end_bound_ForLoop = BACKLOG_NUM_JOBSMAX
+    increase_factor = 60 # factor that is used to multiply some object by a factor to increase by, in this case by 5%
+    standard_deviation_boundary = 50.0 # the percent acceptance rate that there may be a potential gain for reallocation
+    num_jobs_boundary = 45 # the number of jobs that the user thinks is acceptable to think the standard deviation is a valid number
+    # CONTINUED: this is important as to evaluate results quickly by looking at standard deviations that are considered significantly significant
+    # as the conditions utilized are representative of jobs that could be affected in the mass
 
-    STRTMAXMIN = 360
-    ENDMAXMIN = STRTMAXMIN * 1.05
+    STRTMAXMIN = 240
+    ENDMAXMIN = 1500
 
-    STRTBKLGMIN = 1
+    STRTBKLGMIN = 10000
     ENDBKLGMIN = BACKLOG_MINUTESMAX
 
-    STRTBKLGNUMJOBS = 10
-    ENDBKLGNUMJOBS = STRTBKLGNUMJOBS + 10
+    STRTBKLGNUMJOBS = 100
+    ENDBKLGNUMJOBS = 500
 
-    STRTQUEUEMIN = 1
+    STRTQUEUEMIN = 100
     ENDQUEUEMIN = QUEUE_MINUTESMAX
 
     std_percentage_list = []
 
 
-    with open('360_Startfor_max_minRequested_increaseby5_percent_50PercentBounds.txt', "w") as f:
+    with open('largeJobs_t1.txt', "w") as f:
         for i in range(start_bound_ForLoop, end_bound_ForLoop, loop_step_size):
             current_where_clause = " WHERE max_minutes BETWEEN " + str(STRTMAXMIN) + " AND " + str(ENDMAXMIN) + \
                                    " AND backlog_minutes BETWEEN " + str(STRTBKLGMIN) + " AND " + str(ENDBKLGMIN) + \
@@ -149,6 +154,8 @@ def query(connection, mainConnection, tableName):
                     "stddev_samp(backlog_num_jobs) AS STDFORAverageNumberOfBacklogJobs" \
                     " FROM HPC_Job_Database.stampede2_jobq" + current_where_clause
 
+            print("\n", query)
+
             # str(i) + " AND " + str(i + loop_step_size)
             df_tmp = pd.read_sql(query, connection)
 
@@ -160,8 +167,14 @@ def query(connection, mainConnection, tableName):
 
             total_jobs = float(df["TotalJobs"])
 
-            if total_jobs == 0.0:
+            if total_jobs == 0.0: # skips writing to file if there were no jobs in the query found, IE no statistics to be had
                 print("\nNo jobs in this query, skipping...")
+                STRTMAXMIN = STRTMAXMIN + 60
+                ENDMAXMIN = STRTMAXMIN + 100
+                STRTBKLGNUMJOBS = STRTBKLGNUMJOBS
+                ENDBKLGNUMJOBS = ENDBKLGNUMJOBS
+                STRTBKLGMIN = STRTBKLGMIN
+                ENDBKLGMIN = ENDBKLGMIN
                 continue
 
             average_max_minutes = float(df["AverageMaxMinutesRequestedPerJob"]) # Mean Max_Minutes Requested for the query
@@ -206,9 +219,13 @@ def query(connection, mainConnection, tableName):
                 std_percentage = abs(std_for_average_queue_minutes / average_queue_minutes) * 100
                 std_percentage_list.append(std_percentage)
 
-                if std_percentage <= 50.0:
+                if std_percentage <= standard_deviation_boundary:
                     print("\nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
-                    f.write("\n\nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
+                    if total_jobs >= num_jobs_boundary:
+                        print("\nStatisically significant std_for_average_queue_minutes found")
+                        f.write("\n\nStatisically significant std_for_average_queue_minutes found. \nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
+                    else:
+                        f.write("\n\nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage) + " None significant")
                 else:
                     print("\nThe std_for_average_queue_minutes is not within +/- 50% of the average_queue_minutes -> " + str(std_percentage))
                     f.write("\n\nThe std_for_average_queue_minutes IS NOT within +/- 50% of the average_queue_minutes -> " + str(std_percentage))
@@ -231,26 +248,31 @@ def query(connection, mainConnection, tableName):
             #f.write("\nQueue Percentage, IE it calculates how much the average queue time exceeds the average max time: " + str(queue_percentage) + "\n\n--------------------------------------------\n")
 
             # Increase values for the next iteration
-            STRTMAXMIN = ENDMAXMIN
-            ENDMAXMIN = STRTMAXMIN * 1.05
-            STRTBKLGNUMJOBS = ENDBKLGNUMJOBS
-            ENDBKLGNUMJOBS = STRTBKLGNUMJOBS + 10
+            STRTMAXMIN = STRTMAXMIN + 60
+            ENDMAXMIN = ENDMAXMIN + 100
+            STRTBKLGNUMJOBS = STRTBKLGNUMJOBS
+            ENDBKLGNUMJOBS = ENDBKLGNUMJOBS
+            STRTBKLGMIN = STRTBKLGMIN
+            ENDBKLGMIN = ENDBKLGMIN
 
             if ENDMAXMIN >= MAX_MINUTESMAX:
                 print("\nRan out of requested max_minutes")
                 break
 
-        mean_std_percentage = statistics.mean(std_percentage_list)
-        f.write("\n\nMean Standard Deviation Percentage: " + str(mean_std_percentage))
-        f.write("\nMaximum STD value: " + str(max(std_percentage_list)))
-        f.write("\nMinimum STD value: " + str(min(std_percentage_list)))
-        f.write("\nSTD values for run: \n")
+        if std_percentage_list:
+            mean_std_percentage = statistics.mean(std_percentage_list)
+            f.write("\n\nMean Standard Deviation Percentage: " + str(mean_std_percentage))
+            f.write("\nMaximum STD value: " + str(max(std_percentage_list)))
+            f.write("\nMinimum STD value: " + str(min(std_percentage_list)))
+            f.write("\nSTD values for run: \n")
 
-        std_percentage_list_sorted = sorted(std_percentage_list)
+            std_percentage_list_sorted = sorted(std_percentage_list)
 
-        for value in std_percentage_list_sorted:
-            f.write(f'{value}\n')
-
+            for value in std_percentage_list_sorted:
+                f.write(f'{value}\n')
+        else:
+            mean_std_percentage = None  # handle for when the list is empty
+            f.write("None was found in this trial")
         f.close
 
 def main():
