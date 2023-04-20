@@ -177,8 +177,8 @@ def query(connection):
                             std_percentage_list.append(std_percentage)
 
                             if std_percentage <= standard_deviation_boundary and total_jobs >= num_jobs_boundary:
-                                print("\nStatisically significant std_for_average_queue_minutes found")
-                                f.write("\n\nStatisically significant std_for_average_queue_minutes found. \nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
+                                print("\nStatistically significant std_for_average_queue_minutes found")
+                                f.write("\n\nStatistically significant std_for_average_queue_minutes found. \nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
                             elif std_percentage <= standard_deviation_boundary and total_jobs < num_jobs_boundary:
                                 #print("\nThe std_for_average_queue_minutes is within +/- 50% of the average_queue_minutes but not considered significant -> " + str(std_percentage))
                                 f.write("\n\nThe std_for_average_queue_minutes is within +/- 50% of the average_queue_minutes but not considered significant -> " + str(std_percentage))
@@ -202,7 +202,7 @@ def query(connection):
                             print(f"Iteration {good_data_count}: {iter_end_time - iter_start_time:.5f} seconds")
                             print(f"Time between reading SQL and assigning value: {df_tmp_end_time - df_tmp_start_time:.5f} seconds")
                         else:
-                            print("\nNo jobs in this query, skipping...")
+                            #print("\nNo jobs in this query, skipping...")
                             continue
 
                         #f.write("\nQueue Percentage, IE it calculates how much the average queue time exceeds the average max time: " + str(queue_percentage) + "\n\n--------------------------------------------\n")
