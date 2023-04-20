@@ -169,21 +169,21 @@ def query(connection):
 
 
                             # If the mean queue time experienced is within 50% of the mean requested max_minutes value, check for potential gain
-                            if average_queue_minutes > 0:
+                            #if average_queue_minutes > 0:
                                 #queue_percentage = (average_queue_minutes - average_max_minutes) / average_max_minutes # <- most likely not important, cut out
                                 #print("Queue percentage, IE it calculates how much the average queue time exceeds the average max time", queue_percentage)
 
-                                std_percentage = abs(std_for_average_queue_minutes / average_queue_minutes) * 100
-                                std_percentage_list.append(std_percentage)
+                            std_percentage = abs(std_for_average_queue_minutes / average_queue_minutes) * 100
+                            std_percentage_list.append(std_percentage)
 
-                                if std_percentage <= standard_deviation_boundary and total_jobs >= num_jobs_boundary:
-                                    print("\nStatisically significant std_for_average_queue_minutes found")
-                                    f.write("\n\nStatisically significant std_for_average_queue_minutes found. \nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
-                                elif std_percentage <= standard_deviation_boundary and total_jobs < num_jobs_boundary:
-                                    #print("\nThe std_for_average_queue_minutes is within +/- 50% of the average_queue_minutes but not considered significant -> " + str(std_percentage))
-                                    f.write("\n\nThe std_for_average_queue_minutes is within +/- 50% of the average_queue_minutes but not considered significant -> " + str(std_percentage))
-                                else:
-                                    f.write("\n\nThe std_for_average_queue_minutes IS NOT within +/- 50% of the average_queue_minutes -> " + str(std_percentage))
+                            if std_percentage <= standard_deviation_boundary and total_jobs >= num_jobs_boundary:
+                                print("\nStatisically significant std_for_average_queue_minutes found")
+                                f.write("\n\nStatisically significant std_for_average_queue_minutes found. \nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
+                            elif std_percentage <= standard_deviation_boundary and total_jobs < num_jobs_boundary:
+                                #print("\nThe std_for_average_queue_minutes is within +/- 50% of the average_queue_minutes but not considered significant -> " + str(std_percentage))
+                                f.write("\n\nThe std_for_average_queue_minutes is within +/- 50% of the average_queue_minutes but not considered significant -> " + str(std_percentage))
+                            else:
+                                f.write("\n\nThe std_for_average_queue_minutes IS NOT within +/- 50% of the average_queue_minutes -> " + str(std_percentage))
 
                             # Write the print statements to the file
                             f.write("\n\nWHERE CLAUSE -> \n" + current_where_clause + "\n")
