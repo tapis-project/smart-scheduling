@@ -71,7 +71,7 @@ def query(connection):
 
     # Trial Analysis conditions
     standard_deviation_boundary = 50.0 # the percent acceptance rate that there may be a potential gain for reallocation
-    num_jobs_boundary = 75 # the number of jobs that the user thinks is acceptable to think the standard deviation is a valid number
+    num_jobs_boundary = 55 # the number of jobs that the user thinks is acceptable to think the standard deviation is a valid number
     # CONTINUED: this is important as to evaluate results quickly by looking at standard deviations that are considered significantly significant
     # as the conditions utilized are representative of jobs that could be affected in the mass
 
@@ -91,13 +91,14 @@ def query(connection):
 
     strt_bklg_num_jobs = 1
     end_bklg_num_jobs = BACKLOG_NUM_JOBS_MAX
-    backlog_jobs_step = 50
+    backlog_jobs_step = BACKLOG_NUM_JOBS_MAX
 
     str_queue_min = 1
     end_queue_min = QUEUE_MINUTES_MAX
     queue_min_step = 500
 
-    good_data_count = 0 # counts how many of the queries in the dataset are "good" or produce a value that is non 0 
+    good_data_count = 0 # counts how many of the queries in the dataset are "good" or produce a value that is statistically significant in regards to the research
+    total_num_iterations = 0
 
     start_time = time.time()
 
@@ -106,7 +107,11 @@ def query(connection):
             for j in range(strt_bklg_min, end_bklg_min, backlog_min_step):
                 for k in range(strt_bklg_num_jobs, end_bklg_num_jobs, backlog_jobs_step):
                     for m in range(str_queue_min, end_queue_min, queue_min_step):
+
                         iter_start_time = time.time()
+
+                        total_num_iterations += 1
+
                         current_where_clause = " WHERE max_minutes BETWEEN " + str(i) + " AND " + str(i + max_min_step) + \
                                            " AND backlog_minutes BETWEEN " + str(j) + " AND " + str(j + backlog_min_step) + \
                                            " AND backlog_num_jobs BETWEEN " + str(k) + " AND " + str(k + backlog_jobs_step) + \
@@ -130,8 +135,7 @@ def query(connection):
 
                         total_jobs = float(df["TotalJobs"])
 
-                        if total_jobs >= 30.0: # skips writing to file if there were no jobs in the query found, IE no statistics to be had for 0 cases as well as tiny jobs that only had 1 occurance
-                            good_data_count += 1 
+                        if total_jobs >= num_jobs_boundary: # skips writing to file if there were no jobs in the query found, IE no statistics to be had for 0 cases as well as tiny jobs that only had 1 occurance
                             average_max_minutes = float(df["AverageMaxMinutesRequestedPerJob"]) # Mean Max_Minutes Requested for the query
                             average_queue_minutes = float(df["AverageQueueMinutesEachJobExperienced"]) # Mean Queue Minutes Experienced for the query
                             average_backlog_minutes = float(df["AverageBacklogMinutes"]) # Mean Backlog Minutes Experienced for the query
@@ -140,6 +144,7 @@ def query(connection):
                             std_for_average_queue_minutes = float(df["STDFORAverageQueueMinutesEachJobExperienced"])
                             std_for_average_backlog_minutes = float(df["STDFORAverageBacklogMinutes"])
                             std_for_average_number_of_backlog_jobs = float(df["STDFORAverageNumberOfBacklogJobs"])
+
                             df_tmp_end_time = time.time()
 
 
@@ -176,33 +181,32 @@ def query(connection):
                             std_percentage = abs(std_for_average_queue_minutes / average_queue_minutes) * 100
                             std_percentage_list.append(std_percentage)
 
-                            if std_percentage <= standard_deviation_boundary and total_jobs >= num_jobs_boundary:
-                                print("\nStatistically significant std_for_average_queue_minutes found")
-                                f.write("\n\nStatistically significant std_for_average_queue_minutes found. \nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
-                            elif std_percentage <= standard_deviation_boundary and total_jobs < num_jobs_boundary:
-                                #print("\nThe std_for_average_queue_minutes is within +/- 50% of the average_queue_minutes but not considered significant -> " + str(std_percentage))
-                                f.write("\n\nThe std_for_average_queue_minutes is within +/- 50% of the average_queue_minutes but not considered significant -> " + str(std_percentage))
-                            else:
-                                f.write("\n\nThe std_for_average_queue_minutes IS NOT within +/- 50% of the average_queue_minutes -> " + str(std_percentage))
+                            if std_percentage <= standard_deviation_boundary:
+                                good_data_count += 1
+                                print("\nStatistically significant std_for_average_queue_minutes found\n" + current_where_clause + "\n")
+                                f.write("\nStatistically significant std_for_average_queue_minutes found. \nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
 
-                            # Write the print statements to the file
-                            f.write("\n\nWHERE CLAUSE -> \n" + current_where_clause + "\n")
-                            f.write("Total Number of Jobs: " + str(total_jobs) + "\n")
+                                # Write the print statements to the file
+                                f.write("\n\nWHERE CLAUSE -> \n" + current_where_clause + "\n")
+                                f.write("Total Number of Jobs: " + str(total_jobs) + "\n")
 
-                            f.write("\nMEANS DATA:\nMean max_minutes: " + str(average_max_minutes) + "\n")
-                            f.write("Mean queue_minutes: " + str(average_queue_minutes) + "\n")
-                            f.write("Mean Backlog Number of Jobs: " + str(average_number_of_backlog_jobs) + "\n")
-                            f.write("Mean Backlog Minutes: " + str(average_backlog_minutes) + "\n")
+                                f.write("\nMEANS DATA:\nMean max_minutes: " + str(average_max_minutes) + "\n")
+                                f.write("Mean queue_minutes: " + str(average_queue_minutes) + "\n")
+                                f.write("Mean Backlog Number of Jobs: " + str(average_number_of_backlog_jobs) + "\n")
+                                f.write("Mean Backlog Minutes: " + str(average_backlog_minutes) + "\n")
 
-                            f.write("\nSTANDARD DEVIATION DATA:\nMean max_minutes standard deviation: " + str(std_for_average_max_minutes) + "\n")
-                            f.write("Mean queue_minutes standard deviation: " + str(std_for_average_queue_minutes) + "\n")
-                            f.write("Mean Backlog Number of Jobs standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
-                            f.write("Mean Backlog Minutes Requested standard deviation: " + str(std_for_average_number_of_backlog_jobs) + "\n--------------------------------------------")
-                            iter_end_time = time.time()
-                            print(f"Iteration {good_data_count}: {iter_end_time - iter_start_time:.5f} seconds")
-                            print(f"Time between reading SQL and assigning value: {df_tmp_end_time - df_tmp_start_time:.5f} seconds")
+                                f.write("\nSTANDARD DEVIATION DATA:\nMean max_minutes standard deviation: " + str(std_for_average_max_minutes) + "\n")
+                                f.write("Mean queue_minutes standard deviation: " + str(std_for_average_queue_minutes) + "\n")
+                                f.write("Mean Backlog Number of Jobs standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
+                                f.write("Mean Backlog Minutes Requested standard deviation: " + str(std_for_average_number_of_backlog_jobs) + "\n--------------------------------------------")
+
+                                iter_end_time = time.time()
+
+                                print(f"Good Query Iteration {good_data_count}: {iter_end_time - iter_start_time:.5f} seconds")
+                                print(f"Time between reading SQL and assigning value: {df_tmp_end_time - df_tmp_start_time:.5f} seconds\n")
+
                         else:
-                            #print("\nNo jobs in this query, skipping...")
+                            print(f"Iteration {total_num_iterations}")
                             continue
 
                         #f.write("\nQueue Percentage, IE it calculates how much the average queue time exceeds the average max time: " + str(queue_percentage) + "\n\n--------------------------------------------\n")
@@ -223,7 +227,8 @@ def query(connection):
                     #     f.write("None was found in this trial")
         total_time = time.time() - start_time
         print(f"Total time taken: {total_time:.5f} seconds")
-    f.write(f"\nNumber of \"good\" data returned, IE the number of queries in the dataset that returned a non 0 value: {good_data_count}")
+    f.write(f"\nNumber of \"good\" data returned, IE the number of queries in the dataset that returned a valuable query result: {good_data_count}")
+    f.write(f"\nTotal number of iterations: {total_num_iterations}")
     f.close
 
 
