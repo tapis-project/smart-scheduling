@@ -19,6 +19,13 @@ my_passwd = "am_)jRsFjPo9ZL0"  # Password for the user with the access mentioned
 my_database = "HPC_Job_Database"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
 # **************************************************************
 
+'''
+The purpose of NewAnalysis.py is to provide statistical analysis on the stampede2_jobq data table in the hopes of finding significant standard deviations in the queue_minutes column for the purpose of dynamic
+reallocation on the various Texas Advanced Computing Center (TACC) High-Performance Computer (HPC) systems. The purpose of reallocation is in the hope of reducing the overall wait time jobs experience in 
+the HPC queue by either moving the job to a different HPC queue or having the job run on a virtual machine (VM). 
+'''
+
+
 
 def connect():
     '''
@@ -54,7 +61,15 @@ def connectGen():
     return genConnection
 
 def query(connection):
+    '''
+    The query() function is a mathematical analysis function that takes the 'connection' object provided by the connect() function and establishes a connection with the MySQL database to run SQL commands.
+    To be more specific, this function runs a predetermined query that queries different means and standard deviations of the various independent and dependent variable columns in the 'stampede2_jobq' database.
+    The query() function queries from the database using the provided query, with values determined by previously calculated values that were deemed as so in terms of the context of the project.
+    The function runs its operations and writes to file the results if the result is deemed statistically significant in the context of the project.
 
+    :return:
+        file.txt: arbitrary name for a .txt file that returns the statistical results from the query as mentioned above, the file only writes statistically significant results determined in the comment above
+    '''
 
     connection = connection
 
@@ -67,7 +82,7 @@ def query(connection):
     # std_for_average_queue_minutes_list = []
     # std_for_average_backlog_minutes_list = []
     # std_for_average_number_of_backlog_jobs_list = []
-    std_percentage_list = []
+    # std_percentage_list = []
 
     # Trial Analysis conditions
     standard_deviation_boundary = 50.0 # the percent acceptance rate that there may be a potential gain for reallocation
@@ -81,42 +96,44 @@ def query(connection):
     QUEUE_MINUTES_MAX = 19000 # Actual maximum number is 90116; Run special tests for thsoe jobs > 19000, there are 268 jobs
 
     # Knob boundary conditions and corresponding 'ith' iteration values
-    strt_max_min = 1 # Start Max_Minutes Boundary Cond.
+    strt_max_min = 1 # Max_Minutes Boundary Cond.
     end_max_min = MAX_MINUTES_MAX # End Max_Minutes Boundary Cond.
     max_min_step = 120 # the incrementation value for max_min
 
-    strt_bklg_min = 1
+    strt_bklg_min = 1 # Backlog Minutes Boundary Condition
     end_bklg_min = BACKLOG_MINUTES_MAX
-    backlog_min_step = 500
+    backlog_min_step = BACKLOG_MINUTES_MAX
 
-    strt_bklg_num_jobs = 1
+    strt_bklg_num_jobs = 1 # Backlog Number of Jobs Boundary Condition
     end_bklg_num_jobs = BACKLOG_NUM_JOBS_MAX
-    backlog_jobs_step = BACKLOG_NUM_JOBS_MAX
+    backlog_jobs_step = 10
 
-    str_queue_min = 1
+    str_queue_min = 1 # Queue Minutes Boundary Condition
     end_queue_min = QUEUE_MINUTES_MAX
     queue_min_step = 500
 
     good_data_count = 0 # counts how many of the queries in the dataset are "good" or produce a value that is statistically significant in regards to the research
-    total_num_iterations = 0
+    total_num_iterations = 0 # counts the total amount of iterations had in the trial
 
-    start_time = time.time()
+    start_time = time.time() # used to track the time it takes for the for-loop to run
 
-    with open('Stampede2_Normal_Queue_Bin_Sweep.txt', "a") as f:
+    with open('Stampede2_Normal_Queue_Bin_Sweep_Num_Jobs_iter.txt', "a") as f:
         for i in range(strt_max_min, end_max_min, max_min_step):
             for j in range(strt_bklg_min, end_bklg_min, backlog_min_step):
                 for k in range(strt_bklg_num_jobs, end_bklg_num_jobs, backlog_jobs_step):
                     for m in range(str_queue_min, end_queue_min, queue_min_step):
 
-                        iter_start_time = time.time()
+                        iter_start_time = time.time() # current iteration start time
 
                         total_num_iterations += 1
 
+                        # the current SQL where clause that the current iteration is going to operate under
                         current_where_clause = " WHERE max_minutes BETWEEN " + str(i) + " AND " + str(i + max_min_step) + \
                                            " AND backlog_minutes BETWEEN " + str(j) + " AND " + str(j + backlog_min_step) + \
                                            " AND backlog_num_jobs BETWEEN " + str(k) + " AND " + str(k + backlog_jobs_step) + \
                                            " AND queue_minutes BETWEEN " + str(m) + " AND " + str(m + queue_min_step) + ";"
 
+                        # SQL SELECT statement that combined with current_where_clause returns the means and the sample standard deviations for the max_minutes, queue_minutes, backlog_minutes, and backlog_num_jobs cols
                         query = "SELECT COUNT(max_minutes) AS TotalJobs," \
                                 "AVG(max_minutes) AS AverageMaxMinutesRequestedPerJob," \
                                 "AVG(queue_minutes) AS AverageQueueMinutesEachJobExperienced," \
@@ -128,14 +145,15 @@ def query(connection):
                                 "stddev_samp(backlog_num_jobs) AS STDFORAverageNumberOfBacklogJobs" \
                                 " FROM HPC_Job_Database.stampede2_jobq" + current_where_clause
 
-                        df_tmp_start_time = time.time()
+                        df_tmp_start_time = time.time() # time check to see how long the SQL query converted into a pandas DF and the DF queries take
 
                         df = pd.read_sql(query, connection).fillna(0)# Handles cases where the dataframe returns "NoneType" values because there is no data that is returned and as such replaces all those values with 0
                         # Method not full proof, needs to be handled better to skip AND statements where that occurs
 
                         total_jobs = float(df["TotalJobs"])
 
-                        if total_jobs >= num_jobs_boundary: # skips writing to file if there were no jobs in the query found, IE no statistics to be had for 0 cases as well as tiny jobs that only had 1 occurance
+                        if total_jobs >= num_jobs_boundary:  # skips writing to file if there were no jobs in the query found, IE no statistics to be had for 0 cases as well as tiny jobs that only had 1 occurance
+
                             average_max_minutes = float(df["AverageMaxMinutesRequestedPerJob"]) # Mean Max_Minutes Requested for the query
                             average_queue_minutes = float(df["AverageQueueMinutesEachJobExperienced"]) # Mean Queue Minutes Experienced for the query
                             average_backlog_minutes = float(df["AverageBacklogMinutes"]) # Mean Backlog Minutes Experienced for the query
@@ -178,8 +196,11 @@ def query(connection):
                                 #queue_percentage = (average_queue_minutes - average_max_minutes) / average_max_minutes # <- most likely not important, cut out
                                 #print("Queue percentage, IE it calculates how much the average queue time exceeds the average max time", queue_percentage)
 
+                            # calculated to see if the queue minute standard deviation is close to the queue minute mean, IE if the calculated standard deviation is valid
                             std_percentage = abs(std_for_average_queue_minutes / average_queue_minutes) * 100
-                            std_percentage_list.append(std_percentage)
+
+
+                            #std_percentage_list.append(std_percentage)
 
                             if std_percentage <= standard_deviation_boundary:
                                 good_data_count += 1
@@ -209,27 +230,28 @@ def query(connection):
                             print(f"Iteration {total_num_iterations}")
                             continue
 
-                        #f.write("\nQueue Percentage, IE it calculates how much the average queue time exceeds the average max time: " + str(queue_percentage) + "\n\n--------------------------------------------\n")
+                    #f.write("\nQueue Percentage, IE it calculates how much the average queue time exceeds the average max time: " + str(queue_percentage) + "\n\n--------------------------------------------\n")
 
-                    # if std_percentage_list:
-                    #     mean_std_percentage = statistics.mean(std_percentage_list)
-                    #     f.write("\n\nMean Standard Deviation Percentage: " + str(mean_std_percentage))
-                    #     f.write("\nMaximum STD value: " + str(max(std_percentage_list)))
-                    #     f.write("\nMinimum STD value: " + str(min(std_percentage_list)))
-                    #     f.write("\nSTD values for run: \n")
-                    #
-                    #     std_percentage_list_sorted = sorted(std_percentage_list)
-                    #
-                    #     for value in std_percentage_list_sorted:
-                    #         f.write(f'{value}\n')
-                    # else:
-                    #     mean_std_percentage = None  # handle for when the list is empty
-                    #     f.write("None was found in this trial")
+                # if std_percentage_list:
+                #     mean_std_percentage = statistics.mean(std_percentage_list)
+                #     f.write("\n\nMean Standard Deviation Percentage: " + str(mean_std_percentage))
+                #     f.write("\nMaximum STD value: " + str(max(std_percentage_list)))
+                #     f.write("\nMinimum STD value: " + str(min(std_percentage_list)))
+                #     f.write("\nSTD values for run: \n")
+                #
+                #     std_percentage_list_sorted = sorted(std_percentage_list)
+                #
+                #     for value in std_percentage_list_sorted:
+                #         f.write(f'{value}\n')
+                # else:
+                #     mean_std_percentage = None  # handle for when the list is empty
+                #     f.write("None was found in this trial")
         total_time = time.time() - start_time
         print(f"Total time taken: {total_time:.5f} seconds")
-    f.write(f"\nNumber of \"good\" data returned, IE the number of queries in the dataset that returned a valuable query result: {good_data_count}")
-    f.write(f"\nTotal number of iterations: {total_num_iterations}")
-    f.close
+    f.write("\nNumber of \"good\" data returned, IE the number of queries in the dataset that returned a valuable query result: " + str(good_data_count))
+    f.write("\nTotal number of iterations: " + str(total_num_iterations))
+
+    f.close()
 
 
 def main():
