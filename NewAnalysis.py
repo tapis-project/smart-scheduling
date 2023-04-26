@@ -101,7 +101,7 @@ def query(connection):
     # Knob boundary conditions and corresponding 'ith' iteration values
     strt_max_min = 1 # Max_Minutes Boundary Cond.
     end_max_min = MAX_MINUTES_MAX # End Max_Minutes Boundary Cond.
-    max_min_step = 120 # the incrementation value for max_min
+    max_min_step = 60 # the incrementation value for max_min
 
     strt_bklg_min = 1 # Backlog Minutes Boundary Condition
     end_bklg_min = BACKLOG_MINUTES_MAX
@@ -109,7 +109,7 @@ def query(connection):
 
     strt_bklg_num_jobs = 1 # Backlog Number of Jobs Boundary Condition
     end_bklg_num_jobs = BACKLOG_NUM_JOBS_MAX
-    backlog_jobs_step = BACKLOG_NUM_JOBS_MAX
+    backlog_jobs_step = 10
 
     str_queue_min = 1 # Queue Minutes Boundary Condition
     end_queue_min = QUEUE_MINUTES_MAX
@@ -120,7 +120,7 @@ def query(connection):
 
     start_time = time.time() # used to track the time it takes for the for-loop to run
 
-    with open('foo.txt', "a") as f:
+    with open('Stampede2_Normal_Queue_Bin_Sweep_all_60.txt', "a") as f:
         for i in range(strt_max_min, end_max_min, max_min_step):
             for j in range(strt_bklg_min, end_bklg_min, backlog_min_step):
                 for k in range(strt_bklg_num_jobs, end_bklg_num_jobs, backlog_jobs_step):
