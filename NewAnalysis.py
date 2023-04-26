@@ -17,8 +17,8 @@ from statistics import mean
 # For further instructions on what these variables mean, and how to update them for this program to run properly,
 # please read the README.md in the Github repository this script was found.
 my_host = "localhost"  # The host variable that the MySQL Database is created on (IE. IP address or local network)
-my_user = "costaki"  # Connection instance username that has the ability to create and modify tables, indexes and databases
-my_passwd = "am_)jRsFjPo9ZL0"  # Password for the user with the access mentioned on the line above
+my_user = "user"  # Connection instance username that has the ability to create and modify tables, indexes and databases
+my_passwd = "password"  # Password for the user with the access mentioned on the line above
 my_database = "HPC_Job_Database"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
 # **************************************************************
 
