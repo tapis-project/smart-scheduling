@@ -129,8 +129,7 @@ def query(connection):
                         iter_start_time = time.time() # current iteration start time
 
                         total_num_iterations += 1
-                        if good_data_count == 2:
-                            break
+
                         # the current SQL where clause that the current iteration is going to operate under
                         current_where_clause = " WHERE max_minutes BETWEEN " + str(i) + " AND " + str(i + max_min_step) + \
                                            " AND backlog_minutes BETWEEN " + str(j) + " AND " + str(j + backlog_min_step) + \
