@@ -4,6 +4,9 @@ import pandas as pd
 import sqlalchemy as sa
 import mysql.connector
 import time
+import numpy as np 
+from statistics import mean
+
 # **************************************************************
 # ASSIGN THESE RUNTIME PARAMETERS FOR YOUR ENVIRONMENT
 #
@@ -73,16 +76,16 @@ def query(connection):
 
     connection = connection
 
-    # total_jobs_list = []
-    # average_max_minutes_list = []
-    # average_queue_minutes_list = []
-    # average_backlog_minutes_list = []
-    # average_number_of_backlog_jobs_list = []
-    # std_for_average_max_minutes_list = []
-    # std_for_average_queue_minutes_list = []
-    # std_for_average_backlog_minutes_list = []
-    # std_for_average_number_of_backlog_jobs_list = []
-    # std_percentage_list = []
+    total_jobs_list = []
+    average_max_minutes_list = []
+    average_queue_minutes_list = []
+    average_backlog_minutes_list = []
+    average_number_of_backlog_jobs_list = []
+    std_for_average_max_minutes_list = []
+    std_for_average_queue_minutes_list = []
+    std_for_average_backlog_minutes_list = []
+    std_for_average_number_of_backlog_jobs_list = []
+    std_percentage_list = []
 
     # Trial Analysis conditions
     standard_deviation_boundary = 50.0 # the percent acceptance rate that there may be a potential gain for reallocation
@@ -98,15 +101,15 @@ def query(connection):
     # Knob boundary conditions and corresponding 'ith' iteration values
     strt_max_min = 1 # Max_Minutes Boundary Cond.
     end_max_min = MAX_MINUTES_MAX # End Max_Minutes Boundary Cond.
-    max_min_step = 120 # the incrementation value for max_min
+    max_min_step = 60 # the incrementation value for max_min
 
     strt_bklg_min = 1 # Backlog Minutes Boundary Condition
     end_bklg_min = BACKLOG_MINUTES_MAX
-    backlog_min_step = BACKLOG_MINUTES_MAX
+    backlog_min_step = 500
 
     strt_bklg_num_jobs = 1 # Backlog Number of Jobs Boundary Condition
     end_bklg_num_jobs = BACKLOG_NUM_JOBS_MAX
-    backlog_jobs_step = 10
+    backlog_jobs_step = BACKLOG_NUM_JOBS_MAX
 
     str_queue_min = 1 # Queue Minutes Boundary Condition
     end_queue_min = QUEUE_MINUTES_MAX
@@ -117,7 +120,7 @@ def query(connection):
 
     start_time = time.time() # used to track the time it takes for the for-loop to run
 
-    with open('Stampede2_Normal_Queue_Bin_Sweep_Num_Jobs_iter.txt', "a") as f:
+    with open('Stampede2_Normal_Queue_Bin_Sweep_60', "a") as f:
         for i in range(strt_max_min, end_max_min, max_min_step):
             for j in range(strt_bklg_min, end_bklg_min, backlog_min_step):
                 for k in range(strt_bklg_num_jobs, end_bklg_num_jobs, backlog_jobs_step):
@@ -165,17 +168,6 @@ def query(connection):
 
                             df_tmp_end_time = time.time()
 
-
-                            # total_jobs_list.append(total_jobs)
-                            # average_max_minutes_list.append(average_max_minutes)
-                            # average_queue_minutes_list.append(average_queue_minutes)
-                            # average_backlog_minutes_list.append(average_backlog_minutes)
-                            # average_number_of_backlog_jobs_list.append(average_number_of_backlog_jobs)
-                            # std_for_average_max_minutes_list.append(std_for_average_max_minutes)
-                            # std_for_average_queue_minutes_list.append(std_for_average_queue_minutes)
-                            # std_for_average_backlog_minutes_list.append(std_for_average_backlog_minutes)
-                            # std_for_average_number_of_backlog_jobs_list.append(std_for_average_number_of_backlog_jobs)
-
                             # print("\nCurrent WHERE CLAUSE -> " + current_where_clause)
                             #
                             # print("Total Number of Jobs: ", total_jobs)
@@ -199,11 +191,20 @@ def query(connection):
                             # calculated to see if the queue minute standard deviation is close to the queue minute mean, IE if the calculated standard deviation is valid
                             std_percentage = abs(std_for_average_queue_minutes / average_queue_minutes) * 100
 
-
-                            #std_percentage_list.append(std_percentage)
-
                             if std_percentage <= standard_deviation_boundary:
                                 good_data_count += 1
+                                
+                                total_jobs_list.append(total_jobs)
+                                average_max_minutes_list.append(average_max_minutes)
+                                average_queue_minutes_list.append(average_queue_minutes)
+                                average_backlog_minutes_list.append(average_backlog_minutes)
+                                average_number_of_backlog_jobs_list.append(average_number_of_backlog_jobs)
+                                std_for_average_max_minutes_list.append(std_for_average_max_minutes)
+                                std_for_average_queue_minutes_list.append(std_for_average_queue_minutes)
+                                std_for_average_backlog_minutes_list.append(std_for_average_backlog_minutes)
+                                std_for_average_number_of_backlog_jobs_list.append(std_for_average_number_of_backlog_jobs)
+                                std_percentage_list.append(std_percentage)
+                                
                                 print("\nStatistically significant std_for_average_queue_minutes found\n" + current_where_clause + "\n")
                                 f.write("\nStatistically significant std_for_average_queue_minutes found. \nThe std_for_average_queue_minutes IS WITHIN +/- 50% of the average_queue_minutes -> " + str(std_percentage))
 
@@ -250,7 +251,20 @@ def query(connection):
         print(f"Total time taken: {total_time:.5f} seconds")
     f.write("\nNumber of \"good\" data returned, IE the number of queries in the dataset that returned a valuable query result: " + str(good_data_count))
     f.write("\nTotal number of iterations: " + str(total_num_iterations))
-
+    
+    f.write("\nTotal number of jobs affected: " + str(sum(total_jobs_list))) 
+    
+    f.write("\nMean max_minutes for all max_minutes mean hits: " + str(mean(average_max_minutes_list)))
+    f.write("\nStandard Deviation of max_minutes for all max_minutes hits: " + str(np.std(average_max_minutes_list, ddof = 1)))
+    
+    f.write("\nMean std_for_average_queue_minutes for all std_for_average_queue_minutes mean hits: " + str(mean(std_for_average_max_minutes_list)))
+    f.write("\nStandard Deviation of std_for_average_queue_minutes for all std_for_average_queue_minutes hits: " + str(np.std(std_for_average_max_minutes_list, ddof = 1)))
+    
+    f.write("\nMean queue_min for all queue_min mean hits: " + str(mean(average_queue_minutes_list)))
+    f.write("\nStandard Deviation of queue_min for all mean queue_min hits: " + str(np.std(average_queue_minutes_list, ddof = 1)))
+    
+    f.write("\nMean backlog_num_jobs for all hits: " + str(mean(average_number_of_backlog_jobs_list))) 
+    f.write("\nStandard Deviation of backlog_num_jobs for all mean backlog_num_jobs hits: " + str(np.std(average_number_of_backlog_jobs_list, ddof = 1)))
     f.close()
 
 
