@@ -101,7 +101,7 @@ def query(connection):
     # Knob boundary conditions and corresponding 'ith' iteration values
     strt_max_min = 1 # Max_Minutes Boundary Cond.
     end_max_min = MAX_MINUTES_MAX # End Max_Minutes Boundary Cond.
-    max_min_step = 60 # the incrementation value for max_min
+    max_min_step = 120 # the incrementation value for max_min
 
     strt_bklg_min = 1 # Backlog Minutes Boundary Condition
     end_bklg_min = BACKLOG_MINUTES_MAX
@@ -120,7 +120,7 @@ def query(connection):
 
     start_time = time.time() # used to track the time it takes for the for-loop to run
 
-    with open('Stampede2_Normal_Queue_Bin_Sweep_60', "a") as f:
+    with open('foo.txt', "a") as f:
         for i in range(strt_max_min, end_max_min, max_min_step):
             for j in range(strt_bklg_min, end_bklg_min, backlog_min_step):
                 for k in range(strt_bklg_num_jobs, end_bklg_num_jobs, backlog_jobs_step):
@@ -129,7 +129,8 @@ def query(connection):
                         iter_start_time = time.time() # current iteration start time
 
                         total_num_iterations += 1
-
+                        if good_data_count == 2:
+                            break
                         # the current SQL where clause that the current iteration is going to operate under
                         current_where_clause = " WHERE max_minutes BETWEEN " + str(i) + " AND " + str(i + max_min_step) + \
                                            " AND backlog_minutes BETWEEN " + str(j) + " AND " + str(j + backlog_min_step) + \
@@ -168,8 +169,8 @@ def query(connection):
 
                             df_tmp_end_time = time.time()
 
+
                             # print("\nCurrent WHERE CLAUSE -> " + current_where_clause)
-                            #
                             # print("Total Number of Jobs: ", total_jobs)
                             #
                             # print("Mean max_minutes:", average_max_minutes)
@@ -230,7 +231,6 @@ def query(connection):
                         else:
                             print(f"Iteration {total_num_iterations}")
                             continue
-
                     #f.write("\nQueue Percentage, IE it calculates how much the average queue time exceeds the average max time: " + str(queue_percentage) + "\n\n--------------------------------------------\n")
 
                 # if std_percentage_list:
@@ -249,23 +249,25 @@ def query(connection):
                 #     f.write("None was found in this trial")
         total_time = time.time() - start_time
         print(f"Total time taken: {total_time:.5f} seconds")
-    f.write("\nNumber of \"good\" data returned, IE the number of queries in the dataset that returned a valuable query result: " + str(good_data_count))
-    f.write("\nTotal number of iterations: " + str(total_num_iterations))
-    
-    f.write("\nTotal number of jobs affected: " + str(sum(total_jobs_list))) 
-    
-    f.write("\nMean max_minutes for all max_minutes mean hits: " + str(mean(average_max_minutes_list)))
-    f.write("\nStandard Deviation of max_minutes for all max_minutes hits: " + str(np.std(average_max_minutes_list, ddof = 1)))
-    
-    f.write("\nMean std_for_average_queue_minutes for all std_for_average_queue_minutes mean hits: " + str(mean(std_for_average_max_minutes_list)))
-    f.write("\nStandard Deviation of std_for_average_queue_minutes for all std_for_average_queue_minutes hits: " + str(np.std(std_for_average_max_minutes_list, ddof = 1)))
-    
-    f.write("\nMean queue_min for all queue_min mean hits: " + str(mean(average_queue_minutes_list)))
-    f.write("\nStandard Deviation of queue_min for all mean queue_min hits: " + str(np.std(average_queue_minutes_list, ddof = 1)))
-    
-    f.write("\nMean backlog_num_jobs for all hits: " + str(mean(average_number_of_backlog_jobs_list))) 
-    f.write("\nStandard Deviation of backlog_num_jobs for all mean backlog_num_jobs hits: " + str(np.std(average_number_of_backlog_jobs_list, ddof = 1)))
-    f.close()
+
+        f.write("\nDATA SUMMARY\n\nNumber of good data returned, IE the number of queries in the dataset that returned a valuable query result: " + str(good_data_count))
+        f.write("\n\nTotal number of iterations: " + str(total_num_iterations))
+
+        f.write("\n\nTotal number of jobs affected: " + str(sum(total_jobs_list)))
+
+        f.write("\n\nMean max_minutes for all max_minutes mean hits: " + str(mean(average_max_minutes_list)))
+        f.write("\n\nStandard Deviation of max_minutes for all max_minutes hits: " + str(np.std(average_max_minutes_list, ddof = 1)))
+
+        f.write("\n\nMean std_for_average_queue_minutes for all std_for_average_queue_minutes mean hits: " + str(mean(std_for_average_max_minutes_list)))
+        f.write("\n\nStandard Deviation of std_for_average_queue_minutes for all std_for_average_queue_minutes hits: " + str(np.std(std_for_average_max_minutes_list, ddof = 1)))
+
+        f.write("\n\nMean queue_min for all queue_min mean hits: " + str(mean(average_queue_minutes_list)))
+        f.write("\n\nStandard Deviation of queue_min for all mean queue_min hits: " + str(np.std(average_queue_minutes_list, ddof = 1)))
+
+        f.write("\n\nMean backlog_num_jobs for all hits: " + str(mean(average_number_of_backlog_jobs_list)))
+        f.write("\n\nStandard Deviation of backlog_num_jobs for all mean backlog_num_jobs hits: " + str(np.std(average_number_of_backlog_jobs_list, ddof = 1)))
+
+        f.close()
 
 
 def main():
