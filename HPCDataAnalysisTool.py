@@ -19,10 +19,6 @@ from datetime import timedelta, datetime
 # For further instructions on what these variables mean, and how to update them for this program to run properly,
 # please read the README.md in the Github repository this script was found.
 my_host = "localhost"  # The host variable that the MySQL Database is created on (IE. IP address or local network)
-my_user = "costaki"  # Connection instance username that has the ability to create and modify tables, indexes and databases
-my_passwd = "am_)jRsFjPo9ZL0"  # Password for the user with the access mentioned on the line above
-my_database = "HPC_Job_Database"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
-NORMALQUEUE_MAXTIME = 2880
 # **************************************************************
 
 
@@ -123,13 +119,6 @@ def query(connection, mainConnection, tableName):
     print("\nNormal Queue Max Time a job can request (2880) times the total number of backed up jobs: ", denominator)
     print("\nCalculation 1: total number of time requested back up jobs / max time you could wait (IE 2880 * total number of backed up jobs", calc1 )
     '''
-
-    connection = connection
-    mainConnection = mainConnection
-
-    cursor = mainConnection.cursor()
-    n = 5 # group number -> will be added by itself IE. 5, 10, 15, ...
-
     '''
     maxBacklog = "SELECT MAX(backlog_num_jobs) FROM HPC_Job_Database.stampede2_jobq;"
     cursor.execute(maxBacklog)
@@ -446,26 +435,28 @@ def plot(mainConnection,  a, b, c):
     '''
 
     '''
-    fig5 = plt.figure()
-    plt.plot(backlogNum, backlogMinMean)
-    plt.title("Backlog Minutes vs Backlog Minutes Mean")
-    plt.xlabel("Backlog Minutes (min)")
-    plt.ylabel("BL Mean")
 
-    fig6 = plt.figure()
-    plt.plot(backlogNum, backlogStd)
-    plt.title("Backlog Minutes vs BL Standard Deviation for all Jobs with increasing BL Min += 100")
-    plt.xlabel("Backlog Minutes (min)")
-    plt.ylabel("BL Standard Deviation")
 
-    
+# Scatter plot of Time Limit requested with respect to the number of CPUs requested
+    scatt2 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of maximum job run time limit requested with respect to the number of CPUs requested", x = "max_minutes", y = "reqcpus")
+    scatt2.set_xlabel("Time Limit/Max_minutes Requested (min)")
+    scatt2.set_ylabel("Number of CPUs Requested")
 
-    fig7 = plt.figure()
-    for x, y in zip(FifteenPercentQTSTD_minStandVal, FifteenPercentQTSTD):
-        plt.scatter(x, y, cmap="copper")
-    plt.title("Jobs Where Their Backlog Queue time Standard Deviation is 15% from the Mean")
-    plt.xlabel("Backlog Minutes (min)")
-    plt.ylabel("BL Standard Deviation")
+    # Scatter plot of Queue Time with respect to Time Limit requested
+    scatt3 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to maximum job run time limit requested", x = "max_minutes", y = "queueTime")
+    scatt3.set_xlabel("Time Limit/Max_minutes Requested (min)")
+    scatt3.set_ylabel("Queue Time (min)")
+
+    # Scatter plot of Queue Time with respect to the number of Nodes requested
+    scatt4 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of nodes requested", x = "nnodes", y = "queueTime")
+    scatt4.set_xlabel("Number of Nodes Requested")
+    scatt4.set_ylabel("Queue Time (min)")
+
+    # Scatter plot of Queue Time with respect to the number of CPUs requested
+    scatt5 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of CPUs requested", x = "reqcpus", y = "queueTime")
+    scatt5.set_xlabel("Number of CPUs Requested")
+    scatt5.set_ylabel("Queue Time (min)")
+
 
     plt.show()
     '''
@@ -498,22 +489,6 @@ def standardDeviationAnalysis(connection, FivePercentQueueMin, TenPercentQueueMi
 
 
 def main():
-    while len(sys.argv) != 2:
-        try:
-
-            print("Please enter the correct amount of command-line arguments in the respective order: "
-                  "\npython3 HPCDataAnalysisTool.py [Table Name]")
-            sys.exit(1)
-        except ValueError:
-            print("Incorrect number of arguments submitted, please make sure to enter the correct amount of command-line arguments (2) in their respective order: "
-                "\npython3 HPCDataAnalysisTool.py [Table Name]")
-
-    if len(sys.argv) == 2:
-        connection = connect() # Connect via Pandas-SQL library
-        mainConnection = connectGen() # mysql.connector connection
-        tableName = sys.argv[1]
-        query(connection, mainConnection, tableName)
-        #tempPlot(connection, mainConnection, tableName)
     #connection.close() # 'Engine' object has no attribute 'close'
     sys.exit(1)
 

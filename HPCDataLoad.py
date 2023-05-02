@@ -276,7 +276,7 @@ def timeConversion(raw):
             # (DD-H:M:S) Format
             temp = re.split('[-]', raw)
             day = (int(temp[0]) * 1440)  # The amount of minutes in a day
-
+            
             temp1 = temp[1]
             hms = re.split('[:]', temp1)
 
@@ -360,8 +360,7 @@ def injection(connection, tableName):
             total_files_skipped += 1
             print("\nERROR: File: ", filename, " is inaccessible, cannot be read due to chmod permission code ",
                   permissionCode, ", skipping file")  # Error handling - lacking read permission access to file
-            writeError(
-                errorStatement=f"\nERROR: File {filename} is inaccessible, cannot be read due to chmod permission code {permissionCode}, skipping file\n")
+            writeError(errorStatement=f"\nERROR: File {filename} is inaccessible, cannot be read due to chmod permission code {permissionCode}, skipping file\n")
             continue
 
         badFirstLnResult = detectBadFirstln(filename)
@@ -495,7 +494,7 @@ def injection(connection, tableName):
             connection.commit()
         except ValueError:
             print("\nVALUE ERROR: Program exited due to a error of one the datapoints on line", lineno, "in file", filename, "\n", line, "\nSkipping line")
-            writeError(errorStatement=f"VALUE ERROR: Program threw out line due to a error of one the datapoints on line {lineno} in file {filename}\n{line}\nSkipping line")
+            writeError(errorStatement=f"\nVALUE ERROR: Program threw out line due to a error of one the datapoints on line {lineno} in file {filename}\n{line}\nSkipping line")
             continue
             #sys.exit(1)
 
