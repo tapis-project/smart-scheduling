@@ -4,8 +4,11 @@ import pandas as pd
 import sqlalchemy as sa
 import mysql.connector
 import matplotlib.pyplot as plt
-import numpy as np
 
+from mpl_toolkits.mplot3d import axes3d
+from numpy import float32, uint32
+import numpy as np
+from datetime import timedelta, datetime
 # **************************************************************
 # ASSIGN THESE RUNTIME PARAMETERS FOR YOUR ENVIRONMENT
 #
@@ -16,9 +19,10 @@ import numpy as np
 # For further instructions on what these variables mean, and how to update them for this program to run properly,
 # please read the README.md in the Github repository this script was found.
 my_host = "localhost"  # The host variable that the MySQL Database is created on (IE. IP address or local network)
-my_user = "root"  # Connection instance username that has the ability to create and modify tables, indexes and databases
-my_passwd = "password"  # Password for the user with the access mentioned on the line above
-my_database = "HPC_Job_Time_Data"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
+my_user = "costaki"  # Connection instance username that has the ability to create and modify tables, indexes and databases
+my_passwd = "am_)jRsFjPo9ZL0"  # Password for the user with the access mentioned on the line above
+my_database = "HPC_Job_Database"  # The MySQL variable that hosts the name of the database that the tables of the submitted data will be stored on (Variable name to change at discretion of user)
+NORMALQUEUE_MAXTIME = 2880
 # **************************************************************
 
 
@@ -49,265 +53,467 @@ def connectGen():
         the cursor
     '''
 
-    genConnection = mysql.connector.connect(host=my_host, user=my_user, passwd=my_passwd)
+    genConnection = mysql.connector.connect(host=my_host, user=my_user, passwd=my_passwd, database=my_database)
 
-    print('\nSuccessfully Connected to MySQL Server')
+    #print('\nSuccessfully Connected to your MySQL Database:', my_database)
 
     return genConnection
 
-def query(connection, tableName, queueType, numNodes, state, max_minutes, qtRange, rtRange):
+def query(connection, mainConnection, tableName):
     '''
-    The query() function creates a Pandas dataframe utilizing the user provided parameters to create statistical graphs. The graphs can be used to develop inferences in what is occuring in the dataset.
-    :param connection: Object that holds the established SQL-Python connection to the database
-    :param tableName: Object holding the table name the user is requesting. Can either be specified to one specific table or all tables in the database
-    :param queueType: Object holding the requested queue type to be analyzed
-    :param numNodes: Object holding the requested number of HPC nodes to be analyzed
-    :param state: Object holding the requested job state to be analyzed
-    :param max_minutes: Object holding the requested maximum amount of minutes a job can run for, utilized for specified analysis
-    :return:
-        Returns a specified Pandas dataframe, as well as corresponding graphs.
-    '''
-    allcase = "All"
-    if tableName.casefold() == allcase.casefold():
-        table_queries = []
-        for table in ["frontera", "lonestar6", "stampede", "stampede2", "maverick"]:
-            table_queries.append(f"""
-                    SELECT
-            tablename.jobid,
-            tablename.user,
-            tablename.account,
-            TIMESTAMPDIFF(minute, tablename.submit, tablename.start) AS queueTime,
-            TIMESTAMPDIFF(minute, tablename.start, tablename.
-            end
-            ) AS runTime,
-            tablename.queue,
-            tablename.max_minutes,
-            tablename.state,
-            tablename.nnodes,
-            tablename.reqcpus,
-            tablename.nodelist,
-            '{table}' as computer_source 
-        FROM
-            {table} 
-        WHERE
-            queue LIKE '" + queueType + "' 
-            AND nnodes LIKE '" + numNodes + "' 
-            AND state LIKE '" + state + "'
-        """)
+    jobid = '7257293'
 
-        query = "UNION".join(table_queries)
-        query += "ORDER BY computer_source;"
-    else:
-        query = ("SELECT jobid, user, account, TIMESTAMPDIFF(second, submit, start) AS queueTime, TIMESTAMPDIFF(second, start, end) AS runTime, queue, max_minutes, state, nnodes, reqcpus, nodelist"
-            " FROM " + tableName + " WHERE queue LIKE '" + queueType + "' AND nnodes =" + numNodes + " AND state LIKE '" + state + "' AND max_minutes BETWEEN 1 AND " + max_minutes + "")
-        print(query)
-    df = pd.read_sql(query, connection)
-    df["queueTime"] = df["queueTime"] * 0.0166667 # Multiplies the "queueTime" column (QT) in the dataframe to convert the QT from seconds to minutes
-    df["runTime"] = df["runTime"] * 0.0166667 # Multiplies the "runTime" column (RT) in the dataframe to convert the RT from seconds to minutes
-    positiveQTDFtemp = df[df["queueTime"] >= 0].copy()
-    positiveRTDFtemp = df[df["runTime"] >= 0].copy()
-    correctedDF = pd.merge(positiveQTDFtemp, positiveRTDFtemp, how="inner")
+    # This code block is the initial sql query, which finds for some jobid it's job information in the stampede2_jobq table
+    initialQuery = "SELECT * FROM " + tableName + " WHERE jobid = '" + jobid + "'"
+    print(initialQuery)
+    df = pd.read_sql(initialQuery, connection)
+    #print("dataframe:\n", df)
 
-    datetimeErrors = len(df.index) - len(correctedDF.index)
-    print("\nThere are a total of", datetimeErrors, "errors in the dataset, which are highlighted below:\n")
+    # Taking that job id's data, I grab it's submit time and query all the jobs that are in the backlog
+    initialQuery_SubmitTime = df["submit"].dt.strftime("%Y-%m-%d %H:%M:%S")
+    submit = initialQuery_SubmitTime[0]
+    initialQuery_BacklogMin = df["backlog_minutes"]
 
-    negativeQTDF = df[df["queueTime"] < 0].copy()
-    negativeRTDF = df[df["runTime"] < 0].copy()
-    print("Negative QTs Found:\n", negativeQTDF, "\n")
-    print("Negative RTs Found:\n", negativeRTDF, "\n")
+    backlog_minutes = initialQuery_BacklogMin[0]
+    #print(backlog_minutes)
 
-    summary = correctedDF["queueTime"].describe()
-    summary['var'] = summary['std'] ** 2.0
-    print("Corrected Queue Time Summary")
-    print(summary.apply(lambda x: format(x, 'f')))
-    #graphicalAnalysis(correctedDF)
-
-def rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state, max_minutes, qtRangeMIN, qtRangeMAX, cpuRangeMIN, cpuRangeMAX):
-    '''
-    The rangeQuery() function creates a Pandas dataframe utilizing the user provided parameters to create statistical graphs. The graphs can be used to develop inferences in what is occuring in the dataset.
-    This function differs from query() because it allows the user to input a range of nodes to query.
-    :param connection: Object that holds the established SQL-Python connection to the database
-    :param tableName: Object holding the table name the user is requesting. Can either be specified to one specific table or all tables in the database
-    :param queueType: Object holding the requested queue type to be analyzed
-    :param numNodesMIN: Object holding the minimum requested number of HPC nodes to be analyzed
-    :param numNodesMAX: Object holding the maximum requested number of HPC nodes to be analyzed
-    :param state: Object holding the requested job state to be analyzed
-    :param max_minutes: Object holding the requested maximum amount of minutes a job can run for, utilized for specified analysis
-    :return:
-        Returns a specified Pandas dataframe, as well as corresponding graphs
-    '''
-    QTrangeMIN = int(qtRangeMIN)
-    QTrangeMAX = int(qtRangeMAX)
-    CPUrangeMIN = int(cpuRangeMIN)
-    CPUrangeMAX = int(cpuRangeMAX)
-
-    allcase = "All"
-    #if tableName.casefold() == allcase.casefold():
-    #else:
-    query = ("SELECT jobid, user, account, TIMESTAMPDIFF(second, submit, start) AS queueTime, TIMESTAMPDIFF(second, start, end) AS runTime, queue, max_minutes, state, nnodes, reqcpus, nodelist"
-         " FROM " + tableName + " WHERE queue = '" + queueType + "' AND nnodes BETWEEN " + numNodesMIN + " AND " + numNodesMAX + " AND state = '" + state + "'AND max_minutes BETWEEN 1 AND " + max_minutes + "")
-    #query = ("SELECT jobid, user, account, TIMESTAMPDIFF(second, submit, start) AS queueTime, TIMESTAMPDIFF(second, start, end) AS runTime, queue, max_minutes, state, nnodes, reqcpus, nodelist"
-         #" FROM " + tableName + " WHERE queue = '" + queueType + "' AND nnodes BETWEEN " + numNodesMIN + " AND " + numNodesMAX + " AND state = '" + state + "' AND max_minutes BETWEEN 1 AND " + max_minutes + "")
-    print(query)
-    df = pd.read_sql(query, connection)
-
-    df["queueTime"] = df["queueTime"] * 0.0166667 # Multiplies the "queueTime" column (QT) in the dataframe to convert the QT from seconds to minutes
-    df["runTime"] = df["runTime"] * 0.0166667 # Multiplies the "runTime" column (RT) in the dataframe to convert the RT from seconds to minutes
-
-    # This section between lines 139 and 144 finds both the minimum value and the index of the minimum value of the data frame
-    # Which I used to manually go back into SQL to find the row that produced the first negative number
-    #print("Original", df)
-    #s = df["queueTime"].idxmin()
-    #print(s)
-    #print(df.loc[[s]])
-    #i = df["queueTime"].min()
-    #print("queuetime min for orig", i)
-    #l = df["runTime"].min()
-    #print("runtime min for orig", l)
+    clarifyingQuery = "SELECT * FROM " + tableName + " WHERE start > '" + submit + "' and submit < '" + submit + "'"
+    print(clarifyingQuery)
+    backlogDF = pd.read_sql(clarifyingQuery, connection)
+    #print("backlogDF:\n", backlogDF)
 
 
-    # The objective is to 1) make a copy of the main dataframe where the QT or the RT is < 0, remove those elements that make up those copies from the main DF and then graph each case
 
-    positiveQTDFtemp = df[df["queueTime"] >= 0].copy()
-    positiveRTDFtemp = df[df["runTime"] >= 0].copy()
-    correctedDF = pd.merge(positiveQTDFtemp, positiveRTDFtemp, how = "inner" )
-    print(correctedDF)
-    #print("Corrected\n", correctedDF) # check to see that it truly was corrected
-    #t = correctedDF["queueTime"].min()
-    #print("queuetime min", t)
-    #p = correctedDF["runTime"].min()
-    #print("runtime min", p)
+    # From here, we iterate through the backlog df to develop a weight formula to predict the queues_minutes a job may experience
 
-    datetimeErrors = len(df.index) - len(correctedDF.index)
-    print("\nThere are a total of", datetimeErrors, "errors in the dataset, which are highlighted below:\n")
+    backlog_maxmin = backlogDF["max_minutes"]
+    backlog_submit = backlogDF["submit"]
+    print("BACKLOG SUBMIT\n", backlog_submit)
+    avgSubmitTimeInterval = 0
 
-    negativeQTDF = df[df["queueTime"] < 0].copy()
-    negativeRTDF = df[df["runTime"] < 0].copy()
-    print("Negative QTs Found:\n", negativeQTDF, "\n")
-    print("Negative RTs Found:\n", negativeRTDF, "\n")
 
-    '''
-        result = df["queueTime"].describe()
-        result['var'] = result['std'] ** 2.0
-        print("Original Queue Time Summary")
-        print(result.apply(lambda x: format(x, 'f')))
+    for i in range(1, len(backlog_submit.index)):
+        print("i\n", type(backlog_submit[i]))
+        bljS1 = datetime.fromtimestamp(backlog_submit[i], tz = None)#.strftime("%Y-%m-%d %H:%M:%S")
+        #bljS2 = datetime.fromtimestamp(backlog_submit[i-1])
+
+        print("bljs1\n", bljS1)
+        #avgSubmitTimeInterval += bljS1 - bljS2
+        #print("avg:\n", avgSubmitTimeInterval)
+        break
+    totalBacklogMinTMP = 0
+    calc1 = 0
+    totalnumBackedupJobs = len(backlog_maxmin.index)
+
+    for i in range(0, len(backlog_maxmin.index)):
+        currentblj_maxmin = backlog_maxmin[i]
+
+        totalBacklogMinTMP += currentblj_maxmin # working and correct
+
+
+
+    blSum = np.float32(totalBacklogMinTMP)
+
+    totalBacklogMin = blSum.item()
+    denominator = (NORMALQUEUE_MAXTIME * totalnumBackedupJobs)
+    calc1 = (totalBacklogMin / (NORMALQUEUE_MAXTIME * totalnumBackedupJobs)) * denominator
+
+    print("\nTotal Number of Backed up Jobs: ", totalnumBackedupJobs)
+    print("\nTotal Amount of Time Requested in the Backlog: ", totalBacklogMin)
+    print("\nNormal Queue Max Time a job can request (2880) times the total number of backed up jobs: ", denominator)
+    print("\nCalculation 1: total number of time requested back up jobs / max time you could wait (IE 2880 * total number of backed up jobs", calc1 )
     '''
 
-    summary = correctedDF["queueTime"].describe()
-    summary['var'] = summary['std'] ** 2.0
-    summary['median'] = correctedDF["queueTime"].median()
-    print("Corrected Queue Time Summary")
-    print(summary.apply(lambda x: format(x, 'f')))
+    connection = connection
+    mainConnection = mainConnection
 
-    #longQT = correctedDF[(correctedDF["queueTime"] >= QTrange) & (correctedDF["runTime"] <= RTrange)].copy()
-    longQT = correctedDF[correctedDF["queueTime"].between(QTrangeMIN, QTrangeMAX)].copy()
-    longQTsum = longQT["queueTime"].describe()
-    longQTsum['var'] = longQTsum['std'] ** 2.0
-    print("\nAdjusted Queue Time Summary for the queue bounds of " + qtRangeMIN + " and " + qtRangeMAX) #" and run bounds of " + rtRange)
-    print(longQTsum.apply(lambda x: format(x, 'f')))
+    cursor = mainConnection.cursor()
+    n = 5 # group number -> will be added by itself IE. 5, 10, 15, ...
 
-    #'''
-    narrowCPU = longQT[longQT["reqcpus"].between(CPUrangeMIN, CPUrangeMAX)].copy()
-    narrowCPUsum = narrowCPU["reqcpus"].describe()
-    narrowCPUsum['var'] = narrowCPUsum['std'] ** 2.0
-    print("\nReqCPU Summary for the reqcpu bounds of " + cpuRangeMIN + " and " + cpuRangeMAX) #" and run bounds of " + rtRange)
-    print(narrowCPUsum.apply(lambda x: format(x, 'f')))
-    #'''
-
-    #graphicalAnalysis(correctedDF)
-    graphicalAnalysis(longQT)
-
-def graphicalAnalysis(dataframe):
     '''
-    The function graphicalAnalysis() creates plots based on specified objects considered key for analysis from function provided dataframes, which holds the user-specified queried data.
-    :param dataframe: Pandas Dataframe object that holds the historical job data queried by the user
-    :return:
-        Returns 7 scatter plots detailing tendencies between job data points such as a jobs run time and the amount of CPU processing power requested by the job user.
+    maxBacklog = "SELECT MAX(backlog_num_jobs) FROM HPC_Job_Database.stampede2_jobq;"
+    cursor.execute(maxBacklog)
+    maxBacklog = cursor.fetchall() # maxBacklog is a list
+    maxBacklog = maxBacklog[0][0] # Now a tuple
+
+    classQuery = "SELECT * FROM HPC_Job_Database.stampede2_jobq WHERE backlog_num_jobs = "
+    
+    classNumList = []
+    classMeanList = []
+    classStdList = []
+    
+    
+    for i in range(n, maxBacklog, 5):
+        
+        print("Backlog Class: ", i)
+        classQuerytmp = classQuery + str(i) + ";"
+
+        df = pd.read_sql(classQuerytmp, connection)
+        #submit = df["submit"]
+        #start = df["start"]
+
+        #df["Queue Time"] = (start - submit).dt.seconds
+        queuetime = df["queue_minutes"]
+        
+        queuetimeMean = float(queuetime.mean())
+        queuetimeStd = float(queuetime.std())
+
+        queuetimeMeanPR = convert(queuetime.mean())
+        queuetimeStdPR = convert(queuetime.std())
+        #print("Mean queue time: " + str(queuetimeMean))
+        #print("Standard deviation: " + str(queuetimeStd) + "\n--------------------------------------")
+        classNumList.append(i)
+        classMeanList.append(queuetimeMean)
+        classStdList.append(queuetimeStd)
+
+    classMeanMAX = max(classMeanList)
+    classMeanMIN = min(classMeanList)
+
+    classMeanMaxIndex = classMeanList.index(classMeanMAX)
+    classMeanMinIndex = classMeanList.index(classMeanMIN)
+
+    classMeanMaxIndexNumber = classNumList[classMeanMaxIndex]
+    classMeanMinIndexNumber = classNumList[classMeanMinIndex]
+
+    print("Class Min Max for Class number " + str(classMeanMaxIndexNumber) + " -> " + str(classMeanMAX))
+    print("Class Mean Min for Class number " + str(classMeanMinIndexNumber) + " -> " + str(classMeanMIN))
     '''
-    #bp1 = df.boxplot(column = "queueTime", by = "runTime", grid = False)
-    #bp2 = df.boxplot(column = "queueTime", by = "queue", grid = False)
-    #bp3 = df.boxplot(column = "nnodes", by = "reqcpus", grid = False)
-    #hist = qTdf.plot(kind = "hist", title = "Histogram of Queue Times for " + tableName)
-    #hist.set_xlabel("Queue Time(sec")
-    #hist.set_ylabel("Number of jobs")
+    #----------------------------------------------------------
+
+    backlog_n = 0  # backlog group number -> iterate by 10s
+
+    backlog_minutesMAX_tmp = "SELECT MAX(backlog_minutes) FROM HPC_Job_Database.stampede2_jobq;"
+    cursor.execute(backlog_minutesMAX_tmp)
+    backlog_minutesMAX_tmp = cursor.fetchall()  # max Backlog minutes is a list
+    backlog_minutesMAX = backlog_minutesMAX_tmp[0][0]  # Now a tuple
+
+    genBacklogMinQuery = "SELECT * FROM HPC_Job_Database.stampede2_jobq WHERE backlog_minutes = " # <- queue_minutes and between a range(0, i)
+
+    backlog_minutesList = []
+    backlog_minutesMeanList = []
+    backlog_minutesStdList = []
+
+    for i in range(backlog_n, backlog_minutesMAX, 100):
+        #print("Current backlog minute =", i)
+        backlogQuerytmp = genBacklogMinQuery + str(i) + ";"
+
+        df = pd.read_sql(backlogQuerytmp, connection)
+
+        queuetime = df["queue_minutes"]
+
+        queuetimeMean = float(queuetime.mean())
+        queuetimeStd = float(queuetime.std())
+
+        # queuetimeMeanPR = convert(queuetime.mean())
+        # queuetimeStdPR = convert(queuetime.std())
+        # print("Mean queue time: " + str(queuetimeMean))
+        # print("Standard deviation: " + str(queuetimeStd) + "\n--------------------------------------")
+
+        backlog_minutesList.append(i)
+        backlog_minutesMeanList.append(queuetimeMean)
+        backlog_minutesStdList.append(queuetimeStd)
+
+    backlogNum = backlog_minutesList
+    backlogMinMean = backlog_minutesMeanList
+    backlogStd = backlog_minutesStdList
+
+    TenPercentQTSTD = []
+    TenPercentQTSTD_minStandVal = []
+
+    FivePercentQTSTD = []
+    FivePercentQTSTD_minStandVal = []
+
+    FifteenPercentQTSTD = []
+    FifteenPercentQTSTD_minStandVal = []
+
+    TwentyPercentQTSTD = []
+    TwentyPercentQTSTD_minStandVal = []
+
+    # 10% Standard Deviation
+
+    for i in range(len(backlogStd)):
+        if backlogMinMean[i] == 0:
+            continue
+        if backlogStd[i] <= (0.1 * backlogMinMean[i]):
+            TenPercentQTSTD.append(i)
+
+    for i in range(len(TenPercentQTSTD)):
+        tmp = TenPercentQTSTD[i]
+        tmp2 = backlogNum[tmp]
+        TenPercentQTSTD_minStandVal.append(tmp2)
+
+    # 5% Standard Deviation
+
+    for i in range(len(backlogStd)):
+        if backlogMinMean[i] == 0:
+            continue
+        if backlogStd[i] <= (0.05 * backlogMinMean[i]):
+            FivePercentQTSTD.append(i)
+
+    for i in range(len(FivePercentQTSTD)):
+        tmp = FivePercentQTSTD[i]
+        tmp2 = backlogNum[tmp]
+        FivePercentQTSTD_minStandVal.append(tmp2)
+
+    TenPercentQTSTDFIN = list(set(TenPercentQTSTD) ^ set(FivePercentQTSTD))
+    TenPercentQTSTD_minStandValFIN = list(set(TenPercentQTSTD_minStandVal) ^ set(FivePercentQTSTD_minStandVal))
+
+    # 15% Standard Deviation
+
+    for i in range(len(backlogStd)):
+        if backlogMinMean[i] == 0:
+            continue
+        if backlogStd[i] <= (0.15 * backlogMinMean[i]):
+            FifteenPercentQTSTD.append(i)
+
+    for i in range(len(FifteenPercentQTSTD)):
+        tmp = FifteenPercentQTSTD[i]
+        tmp2 = backlogNum[tmp]
+        FifteenPercentQTSTD_minStandVal.append(tmp2)
+
+    FifteenPercentQTSTDFIN = list(set(FifteenPercentQTSTD) ^ set(TenPercentQTSTD))
+    FifteenPercentQTSTD_minStandValFIN = list(set(FifteenPercentQTSTD_minStandVal) ^ set(TenPercentQTSTD_minStandVal))
+
+    # 20% Standard Deviation
+
+    for i in range(len(backlogStd)):
+        if backlogMinMean[i] == 0:
+            continue
+        if backlogStd[i] <= (0.20 * backlogMinMean[i]):
+            TwentyPercentQTSTD.append(i)
+
+    for i in range(len(TwentyPercentQTSTD)):
+        tmp = TwentyPercentQTSTD[i]
+        tmp2 = backlogNum[tmp]
+        TwentyPercentQTSTD_minStandVal.append(tmp2)
+
+    TwentyPercentQTSTDFIN = list(set(TwentyPercentQTSTD) ^ set(FifteenPercentQTSTD))
+    TwentyPercentQTSTD_minStandValFIN = list(set(TwentyPercentQTSTD_minStandVal) ^ set(FifteenPercentQTSTD_minStandVal))
 
 
-    # Scatter plot of Queue Time with respect to Run Time
-    #scatt1 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to run time", x = "queueTime", y = "runTime", s = 9)
-    #scatt1.set_xlabel("Queue Time (min)")
-    #scatt1.set_ylabel("Run Time (min)")
 
-    # Scatter plot of Queue Time with respect to the number of Nodes requested
-    scatt2 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of nodes requested", x = "nnodes", y = "queueTime", s = 9)
-    scatt2.set_xlabel("Number of Nodes")
-    scatt2.set_ylabel("Queue Time (min)")
 
-    # Scatter plot of Run Time with respect to the number of Nodes requested
-    #scatt3 = dataframe.plot(kind = "scatter", grid = True, title="Scatterplot of run time with respect to the number of nodes requested", x= "runTime", y="nnodes", s = 9)
-    #scatt3.set_xlabel("Run Time (min)")
-    #scatt3.set_ylabel("Number of Nodes")
 
-    # Scatter plot of Queue Time with respect to the number of CPUs requested
-    scatt4 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the number of CPUs requested", x = "reqcpus",y = "queueTime", s = 9)
-    scatt4.set_xlabel("Number of CPUs Requested")
-    scatt4.set_ylabel("Queue Time (min)")
 
-    # Scatter plot of Run Time with respect to the number of Nodes requested
-    #scatt5 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of run time with respect to the number of CPUs requested", x = "runTime", y = "reqcpus", s = 9)
-    #scatt5.set_xlabel("Run Time (min)")
-    #scatt5.set_ylabel("Number of CPUs Requested")
 
-    # Scatter plot of Queue Time with respect to the Partition requested
-    #scatt6 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of queue time with respect to the Partition requested", x = "queueTime",y = "queue", s = 9)
-    #scatt6.set_xlabel("Queue Time (min)")
-    #scatt6.set_ylabel("Partition Requested")
+    print("Jobs Queue Minutes for standard deviation <= 5%", FivePercentQTSTD_minStandVal)
+    print("Standard deviation (5%)", FivePercentQTSTD)
 
-    # Scatter plot of Run Time with respect to the Partition requested
-    #scatt7 = dataframe.plot(kind = "scatter", grid = True, title = "Scatterplot of run time with respect to the Partition requested", x = "runTime", y = "queue", s = 9)
-    #scatt7.set_xlabel("Run Time (min)")
-    #scatt7.set_ylabel("Partition Requested")
+    print("Jobs Queue Minutes for standard deviation 5 <= 10% (Excluding 5%)", TenPercentQTSTD_minStandValFIN)
+    print("Standard deviation (10%)", TenPercentQTSTDFIN)
+
+    print("Jobs Queue Minutes for standard deviation 10 <= 15% (Excluding 5%)", FifteenPercentQTSTD_minStandValFIN)
+    print("Standard deviation (15%)", FifteenPercentQTSTDFIN)
+
+    #standardDeviationAnalysis(cursor, FivePercentQTSTD_minStandVal, TenPercentQTSTD_minStandValFIN, FifteenPercentQTSTD_minStandValFIN)
+    #plot(connection, backlog_minutesList, backlog_minutesMeanList, backlog_minutesStdList)
+
+
+
+    print("\nAnalysis tool start up...")
+    genBacklogMinQuery = "SELECT COUNT(*) FROM HPC_Job_Database.stampede2_jobq WHERE backlog_minutes = "
+
+    print("-----------------------------------------------------------------", "\nFive Percent Standard Deviation Queue Minutes")
+
+    for i in range(len(FivePercentQTSTD_minStandVal)):
+        ithBacklogMin = FivePercentQTSTD_minStandVal[i]
+        backlogQuerytmp = genBacklogMinQuery + str(ithBacklogMin) + ";"
+        df = pd.read_sql(backlogQuerytmp, connection)
+        print(backlogQuerytmp, "\nResult:\n", df, "\n")
+
+    print("-----------------------------------------------------------------", "\nTen Percent Standard Deviation Queue Minutes")
+
+    for i in range(len(TenPercentQTSTD_minStandValFIN)):
+        ithBacklogMin = TenPercentQTSTD_minStandValFIN[i]
+        backlogQuerytmp = genBacklogMinQuery + str(ithBacklogMin) + ";"
+        df = pd.read_sql(backlogQuerytmp, connection)
+        print(backlogQuerytmp, "\nResult:\n", df, "\n")
+
+    print("-----------------------------------------------------------------", "\nFifteen Percent Standard Deviation Queue Minutes")
+
+    for i in range(len(FifteenPercentQTSTD_minStandValFIN)):
+        ithBacklogMin = FifteenPercentQTSTD_minStandValFIN[i]
+        backlogQuerytmp = genBacklogMinQuery + str(ithBacklogMin) + ";"
+        df = pd.read_sql(backlogQuerytmp, connection)
+        print(backlogQuerytmp, "\nResult:\n", df, "\n")
+
+    print("-----------------------------------------------------------------",
+          "\nTwenty Percent Standard Deviation Queue Minutes")
+
+    for i in range(len(TwentyPercentQTSTD_minStandValFIN)):
+        ithBacklogMin = TwentyPercentQTSTD_minStandValFIN[i]
+        backlogQuerytmp = genBacklogMinQuery + str(ithBacklogMin) + ";"
+        df = pd.read_sql(backlogQuerytmp, connection)
+        print(backlogQuerytmp, "\nResult:\n", df, "\n")
+
+    print("-----------------------------------------------------------------")
+
+
+'''
+def backlogMinQuery(connection, mainConnection):
+    backlog_n = 0  # backlog group number -> iterate by 10s 
+    cursor = mainConnection.cursor()
+
+    backlog_minutesMAX_tmp = "SELECT MAX(backlog_minutes) FROM HPC_Job_Database.stampede2_jobq;"
+    cursor.execute(backlog_minutesMAX_tmp)
+    backlog_minutesMAX_tmp = cursor.fetchall()  # max Backlog minutes is a list
+    backlog_minutesMAX = backlog_minutesMAX_tmp[0][0]  # Now a tuple
+
+    genBacklogMinQuery = "SELECT * FROM HPC_Job_Database.stampede2_jobq WHERE backlog_minutes = "
+
+    backlog_minutesList = []
+    backlog_minutesMeanList = []
+    backlog_minutesStdList = []
+
+    for i in range(backlog_n, backlog_minutesMAX, 10):
+        backlogQuerytmp = genBacklogMinQuery + str(i) + ";"
+
+        df = pd.read_sql(backlogQuerytmp, connection)
+        
+        queuetime = df["queue_minutes"]
+
+        queuetimeMean = float(queuetime.mean())
+        queuetimeStd = float(queuetime.std())
+
+        #queuetimeMeanPR = convert(queuetime.mean())
+        #queuetimeStdPR = convert(queuetime.std())
+        # print("Mean queue time: " + str(queuetimeMean))
+        # print("Standard deviation: " + str(queuetimeStd) + "\n--------------------------------------")
+        
+        backlog_minutesList.append(i)
+        backlog_minutesMeanList.append(queuetimeMean)
+        backlog_minutesStdList.append(queuetimeStd)
+
+    classMeanMAX = max(classMeanList)
+    classMeanMIN = min(classMeanList)
+
+    classMeanMaxIndex = classMeanList.index(classMeanMAX)
+    classMeanMinIndex = classMeanList.index(classMeanMIN)
+
+    classMeanMaxIndexNumber = classNumList[classMeanMaxIndex]
+    classMeanMinIndexNumber = classNumList[classMeanMinIndex]
+
+    print("Class Min Max for Class number " + str(classMeanMaxIndexNumber) + " -> " + str(classMeanMAX))
+    print("Class Mean Min for Class number " + str(classMeanMinIndexNumber) + " -> " + str(classMeanMIN))
+'''
+def plot(mainConnection,  a, b, c):
+
+    fig = plt.figure()
+    #ax = fig.add_subplot(111, projection='3d')
+
+    #classNum = x
+    #meanQT = y
+    #QTStd = z
+
+    backlogNum = a
+    backlogMinMean = b
+    backlogStd = c
+
+
+
+    '''
+    ax.scatter(classNum, meanQT, QTStd, c='r', marker='o')
+
+    ax.set_xlabel('Class Number')
+    ax.set_ylabel('Mean QT (sec)')
+    ax.set_zlabel('QT Standard Deviation')
+    plt.title("3D Plot of Class Data of Step Size of 5")
+
+    fig2 = plt.figure()
+    plt.plot(classNum, meanQT)
+    plt.title("Class Number vs Mean QT")
+    plt.xlabel("Class Number")
+    plt.ylabel("Mean Queue Time")
+
+    fig3 = plt.figure()
+    plt.plot(classNum, QTStd)
+    plt.title("Class Number vs QT Standard Deviation")
+    plt.xlabel("Class Number")
+    plt.ylabel("Queue Time Standard Deviation")
+
+    #
+
+    classQuery = "SELECT * FROM HPC_Job_Database.stampede2_jobq WHERE backlog_num_jobs = 400"
+    df = pd.read_sql(classQuery, connection)
+    queuetime = df["queue_minutes"]
+
+    fig4 = plt.figure()
+    plt.plot(queuetime.index, queuetime.values)
+    plt.title("Class Number vs QT for Class Num = 400")
+    plt.xlabel("Class Number")
+    plt.ylabel("Queue Time")
+
+    '''
+
+    '''
+    fig5 = plt.figure()
+    plt.plot(backlogNum, backlogMinMean)
+    plt.title("Backlog Minutes vs Backlog Minutes Mean")
+    plt.xlabel("Backlog Minutes (min)")
+    plt.ylabel("BL Mean")
+
+    fig6 = plt.figure()
+    plt.plot(backlogNum, backlogStd)
+    plt.title("Backlog Minutes vs BL Standard Deviation for all Jobs with increasing BL Min += 100")
+    plt.xlabel("Backlog Minutes (min)")
+    plt.ylabel("BL Standard Deviation")
+
+    
+
+    fig7 = plt.figure()
+    for x, y in zip(FifteenPercentQTSTD_minStandVal, FifteenPercentQTSTD):
+        plt.scatter(x, y, cmap="copper")
+    plt.title("Jobs Where Their Backlog Queue time Standard Deviation is 15% from the Mean")
+    plt.xlabel("Backlog Minutes (min)")
+    plt.ylabel("BL Standard Deviation")
 
     plt.show()
+    '''
+    #standardDeviationAnalysis(mainConnection, FivePercentQTSTD_minStandVal, TenPercentQTSTD_minStandValFIN, FifteenPercentQTSTD_minStandValFIN)
+def convert(seconds):
+    seconds = seconds % (24 * 3600)
+    hour = seconds // 3600
+    seconds %= 3600
+    minutes = seconds // 60
+    seconds %= 60
+
+    return "%d:%02d:%02d" % (hour, minutes, seconds)
+
+'''
+def standardDeviationAnalysis(connection, FivePercentQueueMin, TenPercentQueueMin, FifteenPercentQueueMin):
+
+    print("\nAnalysis tool start up...")
+    genBacklogMinQuery = "SELECT COUNT(*) FROM HPC_Job_Database.stampede2_jobq WHERE backlog_minutes = "
+
+    for i in range(len(FivePercentQueueMin)):
+        ithBacklogMin = FivePercentQueueMin[i]
+        backlogQuerytmp = genBacklogMinQuery + str(ithBacklogMin) + ";"
+        df = pd.read_sql(backlogQuerytmp, connection)
+        print(backlogQuerytmp, "\nResult:\n", df)
+
+'''
+
+
+
+
 
 def main():
-    while len(sys.argv) != 9 and len(sys.argv) != 11:
+    while len(sys.argv) != 2:
         try:
 
-            print("Please enter the correct amount of command-line arguments (7/8) in their respective order: "
-                  "\npython3 HPCDataAnalysisTool.py [Table Name/All] [Queue Type] [Nnodes - Exact or Range] [State] [Max_Minutes] [Queue time range to be observed] [CPU range to be observed]")
+            print("Please enter the correct amount of command-line arguments in the respective order: "
+                  "\npython3 HPCDataAnalysisTool.py [Table Name]")
             sys.exit(1)
         except ValueError:
-            print(
-                "Incorrect number of arguments submitted, please make sure to enter the correct amount of command-line arguments (7/8) in their respective order: "
-                "\npython3 HPCDataAnalysisTool.py [Table Name/All] [Queue Type] [Nnodes - Exact or Range] [State] [Max_Minutes] [Queue time range to be observed] [CPU range to be observed]")
+            print("Incorrect number of arguments submitted, please make sure to enter the correct amount of command-line arguments (2) in their respective order: "
+                "\npython3 HPCDataAnalysisTool.py [Table Name]")
 
-    if len(sys.argv) == 8:
-        # For the case where the user inputs the exact number of nodes they would like to analyze rather than a range
+    if len(sys.argv) == 2:
+        connection = connect() # Connect via Pandas-SQL library
+        mainConnection = connectGen() # mysql.connector connection
         tableName = sys.argv[1]
-        queueType = sys.argv[2]
-        numNodes = sys.argv[3]
-        state = sys.argv[4]
-        max_minutes = sys.argv[5]
-        qtRange = sys.argv[6]
-        cpuRange = sys.argv[7]
-        connection = connect()
-        query(connection, tableName, queueType, numNodes, state, max_minutes, qtRange, cpuRange)
-
-    if len(sys.argv) == 11:
-        # For the case where the user inputs a range for the number of nodes they would like to analyze
-        tableName = sys.argv[1]
-        queueType = sys.argv[2]
-        numNodesMIN = sys.argv[3]
-        numNodesMAX = sys.argv[4]
-        state = sys.argv[5]
-        max_minutes = sys.argv[6]
-        qtRangeMIN = sys.argv[7]
-        qtRangeMAX = sys.argv[8]
-        cpuRangeMIN = sys.argv[9]
-        cpuRangeMAX = sys.argv[10]
-        connection = connect()
-        rangeQuery(connection, tableName, queueType, numNodesMIN, numNodesMAX, state, max_minutes, qtRangeMIN, qtRangeMAX, cpuRangeMIN, cpuRangeMAX)
-
+        query(connection, mainConnection, tableName)
+        #tempPlot(connection, mainConnection, tableName)
     #connection.close() # 'Engine' object has no attribute 'close'
     sys.exit(1)
 
