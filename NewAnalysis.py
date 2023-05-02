@@ -101,11 +101,11 @@ def query(connection):
     # Knob boundary conditions and corresponding 'ith' iteration values
     strt_max_min = 1 # Max_Minutes Boundary Cond.
     end_max_min = MAX_MINUTES_MAX # End Max_Minutes Boundary Cond.
-    max_min_step = 60 # the incrementation value for max_min
+    max_min_step = 120 # the incrementation value for max_min
 
     strt_bklg_min = 1 # Backlog Minutes Boundary Condition
     end_bklg_min = BACKLOG_MINUTES_MAX
-    backlog_min_step = 500
+    backlog_min_step = BACKLOG_MINUTES_MAX
 
     strt_bklg_num_jobs = 1 # Backlog Number of Jobs Boundary Condition
     end_bklg_num_jobs = BACKLOG_NUM_JOBS_MAX
@@ -219,8 +219,8 @@ def query(connection):
 
                                 f.write("\nSTANDARD DEVIATION DATA:\nMean max_minutes standard deviation: " + str(std_for_average_max_minutes) + "\n")
                                 f.write("Mean queue_minutes standard deviation: " + str(std_for_average_queue_minutes) + "\n")
-                                f.write("Mean Backlog Number of Jobs standard deviation: " + str(std_for_average_backlog_minutes) + "\n")
-                                f.write("Mean Backlog Minutes Requested standard deviation: " + str(std_for_average_number_of_backlog_jobs) + "\n--------------------------------------------")
+                                f.write("Mean Backlog Number of Jobs standard deviation: " + str(std_for_average_number_of_backlog_jobs) + "\n")
+                                f.write("Mean Backlog Minutes Requested standard deviation: " + str(std_for_average_backlog_minutes) + "\n--------------------------------------------")
 
                                 iter_end_time = time.time()
 
