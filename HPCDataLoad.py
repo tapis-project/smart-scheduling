@@ -1,6 +1,6 @@
 from __future__ import print_function
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 import mysql.connector
 import os
 from os.path import exists
@@ -509,7 +509,7 @@ def injection(connection, tableName):
 
     end = datetime.now()
     print('\nEnd: ', end)
-    runTime = end - start.replace(tzinfo=None)
+    runTime = end - start
     print("\nScript run time: ", runTime, "\n")
     writeError(errorStatement=f"\nScript ran for {runTime}")
 
